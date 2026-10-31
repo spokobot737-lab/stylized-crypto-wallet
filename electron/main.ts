@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor, safeStorage } from 'electron';
 import { join, resolve, sep, extname } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
@@ -14,7 +14,7 @@ function trusted(event:Electron.IpcMainInvokeEvent){
  const url=event.senderFrame.url;if(dev?!url.startsWith('http://127.0.0.1:5173/'):!url.startsWith('frame://app/'))throw new Error('Niedozwolony dokument.');
 }
 function handle(name:string,fn:(...args:any[])=>unknown){ipcMain.handle(`wallet:${name}`,async(event,...args)=>{
- trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if(['unlock','create','import','send','quote','reveal'].includes(name))lastActivity=Date.now();
+ trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if(['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal'].includes(name))lastActivity=Date.now();
  try{return {ok:true,value:await fn(...args)};}catch(error){const message=error instanceof z.ZodError?'Nieprawidłowe dane wejściowe.':error instanceof Error?error.message:'Operacja nie powiodła się.';return {ok:false,error:message};}
 });}
 function lock(){wallet.lock();window?.webContents.send('wallet:locked');}
@@ -29,7 +29,11 @@ else app.whenReady().then(()=>{
   try{return new Response(await readFile(file),{headers:{'Content-Type':mime[extname(file)],'X-Content-Type-Options':'nosniff'}});}catch{return new Response('Not found',{status:404});}
  });
  if(!app.isPackaged&&process.env.FRAME_TEST_DIR)app.setPath('userData',process.env.FRAME_TEST_DIR);
- wallet=new WalletService(app.getPath('userData'));
+ const protector={
+  async seal(text:string){if(!await safeStorage.isAsyncEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('Systemowy magazyn kluczy jest niedostępny. PIN wymaga ochrony systemowej.');return safeStorage.encryptStringAsync(text);},
+  async open(bytes:Buffer){if(!await safeStorage.isAsyncEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('Systemowy magazyn kluczy jest niedostępny.');return (await safeStorage.decryptStringAsync(bytes)).result;}
+ };
+ wallet=new WalletService(app.getPath('userData'),protector);
  session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  session.defaultSession.setPermissionCheckHandler(()=>false);
  // Renderer never talks to RPC or loads remote scripts. Network access lives in the main process.
@@ -43,11 +47,13 @@ else app.whenReady().then(()=>{
  window.webContents.on('before-input-event',()=>{lastActivity=Date.now();});
  powerMonitor.on('lock-screen',lock);powerMonitor.on('suspend',lock);window.on('closed',()=>wallet.lock());
  handle('status',network=>wallet.status(networkSchema.parse(network)));handle('generate',()=>wallet.generate());
+ handle('initialize',pin=>wallet.initialize(pin));handle('migrate',input=>wallet.migrate(input));
+ handle('switchWallet',(id,network)=>wallet.switchWallet(id,network));handle('renameWallet',(id,name,network)=>wallet.renameWallet(id,name,network));handle('changePin',(oldPin,newPin)=>wallet.changePin(oldPin,newPin));
  handle('create',input=>wallet.create(input));handle('import',input=>wallet.import(input));
  handle('unlock',(password,network)=>wallet.unlock(z.string().max(256).parse(password),network));handle('lock',lock);
  handle('balances',network=>wallet.balances(network));handle('quote',input=>wallet.quote(input));
  handle('history',()=>wallet.history());handle('reveal',password=>wallet.reveal(z.string().max(256).parse(password)));
- handle('send',(id,password)=>wallet.send(id,password,async quote=>{
+ handle('send',id=>wallet.send(id,async quote=>{
   // An OS-owned confirmation shows the immutable, main-process quote, outside React.
   const result=await dialog.showMessageBox(window,{type:'warning',title:'FRAME · Potwierdź przelew',message:`Wyślij ${quote.amount} ${quote.chain}?`,detail:`Sieć: ${quote.networkLabel}\nOdbiorca: ${quote.to}\nOpłata: ${quote.fee} ${quote.chain}\n\nPrzelewu nie można cofnąć.`,buttons:['Anuluj','Podpisz i wyślij'],defaultId:0,cancelId:0,noLink:true});return result.response===1;
  }));
