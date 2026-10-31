@@ -1,10 +1,12 @@
-import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor, safeStorage } from 'electron';
+import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor, safeStorage, clipboard } from 'electron';
 import { join, resolve, sep, extname } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { WalletService, networkSchema } from './service';
 import { explorer } from './chains';
+import { copyPublicText } from './clipboard';
 app.setName('FRAME Wallet');
+if(process.platform==='win32')app.setAppUserModelId('app.frame.wallet');
 protocol.registerSchemesAsPrivileged([{scheme:'frame',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 const dev=!app.isPackaged&&process.env.WALLET_DEV==='1';
 let window:BrowserWindow;let wallet:WalletService;let lastActivity=Date.now();
@@ -14,7 +16,7 @@ function trusted(event:Electron.IpcMainInvokeEvent){
  const url=event.senderFrame.url;if(dev?!url.startsWith('http://127.0.0.1:5173/'):!url.startsWith('frame://app/'))throw new Error('Niedozwolony dokument.');
 }
 function handle(name:string,fn:(...args:any[])=>unknown){ipcMain.handle(`wallet:${name}`,async(event,...args)=>{
- trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if(['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal'].includes(name))lastActivity=Date.now();
+ trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if(['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText'].includes(name))lastActivity=Date.now();
  try{return {ok:true,value:await fn(...args)};}catch(error){const message=error instanceof z.ZodError?'Nieprawidłowe dane wejściowe.':error instanceof Error?error.message:'Operacja nie powiodła się.';return {ok:false,error:message};}
 });}
 function lock(){wallet.lock();window?.webContents.send('wallet:locked');}
@@ -40,7 +42,7 @@ else app.whenReady().then(()=>{
  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>{
   const u=details.url;callback({cancel:!(u.startsWith('frame://app/')||(dev&&(u.startsWith('http://127.0.0.1:5173/')||u.startsWith('ws://127.0.0.1:5173/'))))});
  });
- window=new BrowserWindow({width:1440,height:960,minWidth:1000,minHeight:720,backgroundColor:'#101116',title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
+ window=new BrowserWindow({width:1440,height:960,minWidth:1000,minHeight:720,backgroundColor:'#101116',icon:join(__dirname,'../dist/app-icon.png'),title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
  window.setMenu(null);window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  window.webContents.on('will-navigate',(event,url)=>{if(url!==rendererUrl)event.preventDefault();});
  window.webContents.on('will-attach-webview',event=>event.preventDefault());
@@ -51,6 +53,8 @@ else app.whenReady().then(()=>{
  handle('switchWallet',(id,network)=>wallet.switchWallet(id,network));handle('renameWallet',(id,name,network)=>wallet.renameWallet(id,name,network));handle('changePin',(oldPin,newPin)=>wallet.changePin(oldPin,newPin));
  handle('create',input=>wallet.create(input));handle('import',input=>wallet.import(input));
  handle('unlock',(password,network)=>wallet.unlock(z.string().max(256).parse(password),network));handle('lock',lock);
+ handle('copyText',value=>{if(!wallet.status('testnet').unlocked)throw new Error('Aplikacja jest zablokowana.');return copyPublicText(value,clipboard);});
+ handle('activity',input=>wallet.activity(input));
  handle('balances',network=>wallet.balances(network));handle('quote',input=>wallet.quote(input));
  handle('history',()=>wallet.history());handle('reveal',password=>wallet.reveal(z.string().max(256).parse(password)));
  handle('send',id=>wallet.send(id,async quote=>{

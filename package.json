@@ -1,6 +1,6 @@
 {
   "name": "stylized-crypto-wallet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "FRAME Wallet \u2022 a personal multi-chain desktop wallet",
   "author": "spokobot737-lab",
@@ -69,15 +69,27 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "FRAME-Wallet-${version}-Setup-${arch}.${ext}"
+      "artifactName": "FRAME-Wallet-${version}-Setup-${arch}.${ext}",
+      "icon": "build/icons/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icons/icon.ico",
+      "uninstallerIcon": "build/icons/icon.ico",
+      "installerHeaderIcon": "build/icons/icon.ico"
     },
-    "publish": null
+    "publish": null,
+    "mac": {
+      "icon": "build/icons/icon.icns",
+      "category": "public.app-category.finance"
+    },
+    "linux": {
+      "icon": "build/icons/icon.png",
+      "category": "Finance"
+    }
   },
   "overrides": {
     "jayson": "^5.0.0"

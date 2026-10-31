@@ -1,0 +1,2 @@
+import type { Chain } from '../../electron/types';
+export function CryptoIcon({chain,size=32}:{chain:Chain;size?:number}){return <span className={`crypto-icon crypto-${chain.toLowerCase()}`} style={{width:size,height:size}}><img src={`./coins/${chain.toLowerCase()}.svg`} alt={`${chain==='SOL'?'Solana':chain==='ETH'?'Ethereum':'Bitcoin'} (${chain})`} width={size} height={size} draggable={false}/></span>;}

@@ -7,7 +7,8 @@ import { generateMnemonic, validateMnemonic, seedFrom, accounts } from './keys';
 import { atomicWrite, readVault } from './vault';
 import { newCollection, openCollection, sealCollection, pinSchema, type Collection, type DeviceProtector, type Envelope } from './app-vault';
 import { balances, prepare, sign, broadcast, explorer, type Prepared } from './chains';
-import type { Network, Quote, Transfer, Status } from './types';
+import type { Network, Quote, Transfer, Status, ActivityPage } from './types';
+import { activityInput, fetchActivity, mergeLocalActivity } from './activity';
 export const networkSchema=z.enum(['mainnet','testnet']);
 const walletSchema=z.object({name:z.string().trim().min(1).max(32),passphrase:z.string().max(256)}).strict();
 const quoteSchema=z.object({chain:z.enum(['SOL','ETH','BTC']),network:networkSchema,to:z.string().min(1).max(128),amount:z.string().max(40)}).strict();
@@ -17,6 +18,7 @@ export class WalletService {
  private vaultPath:string;private legacyPath:string;private attemptsPath:string;
  private session?:Session;private pendingMnemonic?:string;private pendingAt=0;
  private epoch=0;private busy=false;private authBusy=false;private failures=0;private retryAt=0;
+ private activityCache=new Map<string,{at:number;value:Promise<ActivityPage>}>();
  private drafts=new Map<string,{quote:Quote;prepared:Prepared;epoch:number}>();
  constructor(private directory:string,private protector:DeviceProtector){this.vaultPath=join(directory,'app.vault');this.legacyPath=join(directory,'wallet.vault');this.attemptsPath=join(directory,'pin-attempts.json');}
  status(network:Network):Status{network=networkSchema.parse(network);const active=this.session?.collection.wallets.find(w=>w.id===this.session!.collection.activeId);let derived:ReturnType<typeof accounts>=[];if(active){const seed=seedFrom(active.mnemonic,active.passphrase);try{derived=accounts(seed,network);}finally{seed.fill(0);}}return {exists:existsSync(this.vaultPath)||existsSync(this.legacyPath),needsMigration:!existsSync(this.vaultPath)&&existsSync(this.legacyPath),unlocked:!!this.session,accounts:derived,wallets:this.session?.collection.wallets.map(({id,name})=>({id,name}))||[],activeWalletId:this.session?.collection.activeId||null};}
@@ -54,7 +56,7 @@ export class WalletService {
  }
  async unlock(pin:string,network:Network){network=networkSchema.parse(network);if(this.busy)throw new Error('Inna operacja jest w toku.');const epoch=this.epoch;const state=await this.authenticate(pin);if(epoch!==this.epoch){state.key.fill(0);throw new Error('Sesja została zablokowana.');}this.session?.key.fill(0);this.session=state;this.epoch++;this.drafts.clear();return this.status(network);}
  async changePin(oldPin:string,newPin:string){pinSchema.parse(newPin);return this.exclusive(async()=>{const s=this.requireSession(),epoch=this.epoch;const proof=await this.authenticate(oldPin);proof.key.fill(0);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');const replacement=await newCollection(s.collection,newPin,this.protector);try{if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');await atomicWrite(this.vaultPath,replacement.envelope);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');s.key.fill(0);this.session={...replacement,collection:s.collection};this.epoch++;this.drafts.clear();}catch(e){replacement.key.fill(0);throw e;}});}
- lock(){this.epoch++;this.session?.key.fill(0);this.session=undefined;this.pendingMnemonic=undefined;this.drafts.clear();}
+ lock(){this.epoch++;this.session?.key.fill(0);this.session=undefined;this.pendingMnemonic=undefined;this.drafts.clear();this.activityCache.clear();}
  async balances(network:Network){network=networkSchema.parse(network);const epoch=this.epoch,seed=this.seed();try{const result=await balances(seed,network);if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');return result;}finally{seed.fill(0);}}
  async quote(input:unknown){const data=quoteSchema.parse(input);const epoch=this.epoch,seed=this.seed(),walletId=this.active().id;try{const prepared=await prepare(seed,data.chain,data.network,data.to,data.amount);if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');const quote:Quote={id:randomUUID(),walletId,chain:data.chain,network:data.network,networkLabel:accounts(seed,data.network).find(a=>a.chain===data.chain)!.networkLabel,from:prepared.from,to:prepared.to,amount:prepared.amount,fee:prepared.fee,feeLabel:prepared.feeLabel,expires:Date.now()+90000};this.drafts.clear();this.drafts.set(quote.id,{quote,prepared,epoch});return quote;}finally{seed.fill(0);}}
  async send(id:string,confirm:(quote:Quote)=>Promise<boolean>){return this.exclusive(async()=>{
@@ -68,5 +70,10 @@ export class WalletService {
  });}
  private historyPath(){const wallet=this.active();return join(this.directory,wallet.legacyHistory?'transfers.json':`transfers-${wallet.id}.json`);}
  async history():Promise<Transfer[]>{const path=this.historyPath();try{return z.array(transferSchema).max(200).parse(JSON.parse(await readFile(path,'utf8')));}catch(e:any){if(e.code==='ENOENT')return [];throw new Error('Nie można odczytać lokalnej historii przelewów.');}}
+ async activity(input:unknown):Promise<ActivityPage>{
+  const data=activityInput.parse(input),epoch=this.epoch,wallet=this.active(),publicAccounts=this.status(data.network).accounts;const key=JSON.stringify([wallet.id,data.network,data.chain||'',data.cursor||'']);let cached=this.activityCache.get(key);
+  if(!cached||Date.now()-cached.at>30000){if(this.activityCache.size>=24)this.activityCache.clear();cached={at:Date.now(),value:fetchActivity(publicAccounts,data.network,data.chain,data.cursor)};this.activityCache.set(key,cached);}
+  const page=await cached.value;if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');const local=await this.history();if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');return {...page,items:mergeLocalActivity(page.items,local.filter(t=>!data.chain||t.chain===data.chain),publicAccounts,data.network)};
+ }
  async reveal(pin:string){this.requireSession();const epoch=this.epoch;const proof=await this.authenticate(pin);proof.key.fill(0);if(epoch!==this.epoch)throw new Error('Sesja została zmieniona.');const {mnemonic,passphrase}=this.active();return {mnemonic,passphrase};}
 }

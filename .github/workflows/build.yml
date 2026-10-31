@@ -1,7 +1,7 @@
 name: Build Windows installer
 on:
   push:
-    branches: [main]
+    branches: [main, 'update/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       # workflows, credentials, binaries, or dependencies and is removed in the same commit.
       - name: Apply source upload
         id: source
-        if: hashFiles('wallet-source.zip') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: hashFiles('wallet-source.zip') != '' && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
         shell: pwsh
         run: |
           Expand-Archive -Path wallet-source.zip -DestinationPath . -Force
@@ -38,7 +38,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
           git commit -m 'Materialize FRAME Wallet source and remove transport archive'
-          git push origin HEAD:main
+          git push origin "HEAD:${{ github.ref_name }}"
           "initial=true" >> $env:GITHUB_OUTPUT
       - uses: actions/setup-node@v4
         with:
@@ -55,6 +55,25 @@ jobs:
         run: npx electron-builder --win nsis --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged Windows icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path 'release/win-unpacked/FRAME Wallet.exe').Path
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if (-not $icon) { throw 'Missing executable icon' }
+          $bitmap = $icon.ToBitmap()
+          $purple = 0
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              $pixel = $bitmap.GetPixel($x,$y)
+              if ($pixel.R -gt 130 -and $pixel.R -lt 230 -and $pixel.B -gt ($pixel.R+20) -and $pixel.G -lt ($pixel.B-20)) { $purple++ }
+            }
+          }
+          if ($purple -lt 5) { throw 'FRAME purple hexagon icon not found in executable' }
+          $bitmap.Save((Join-Path (Get-Location) 'docs/windows-app-icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+          $bitmap.Dispose()
+          $icon.Dispose()
       - name: SHA256 checksums
         shell: pwsh
         run: |
@@ -72,10 +91,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: FRAME-UI-previews
           path: docs/*.png
-          if-no-files-found: error
+          if-no-files-found: ignore
       - name: Publish release with installer
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         shell: pwsh
@@ -92,12 +112,34 @@ jobs:
           elseif (-not (git tag -l "v${version}")) { $tag = "v${version}" }
           else { $tag = "v${version}-build.${{ github.run_number }}" }
           $sha = git rev-parse HEAD
+          # Preserve existing stable releases as browsable branches too.
+          $stableTags = @(git tag -l 'v*' | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' })
+          foreach ($stableTag in $stableTags) {
+            $pastBranch = "versions/$stableTag"
+            $pastExists = git ls-remote --heads origin "refs/heads/$pastBranch"
+            if (-not $pastExists) {
+              $pastSha = git rev-parse "${stableTag}^{commit}"
+              git push origin "${pastSha}:refs/heads/$pastBranch"
+              if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve past version branch' }
+            }
+          }
+          $versionBranch = "versions/v${version}"
+          $existing = git ls-remote --heads origin "refs/heads/$versionBranch"
+          if (-not $existing) {
+            git push origin "${sha}:refs/heads/$versionBranch"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve version branch' }
+          }
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
           Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets.
-          Wiele portfeli, jeden PIN aplikacji, migracja z 0.1 bez utraty portfela.
-          Menu profilu, poprawiony kontrast Alien Signal, kompaktowy pulpit.
-          Zmiana kolejności i rozmiarów kafelków; jednolity zapis zerowych sald.
+          Systemowy schowek z weryfikacją kopiowania adresów i hashy.
+          Cztery motywy: Pop Control, Alien Signal, Chroma Riot i Obsidian.
+          Oryginalne znaki SOL/ETH/BTC, logo F w sześciokącie i siatka heksagonalna.
+          Historia sieciowa z wpływami SOL/ETH/BTC, filtrami i widocznością pól.
+          Konfigurowalne płynne animacje, szybkość i intensywność ruchu.
+          Mainnet przy starcie, zapamiętywanie potwierdzenia przełączenia i Ustawienia.
+          Własna ikona F w sześciokącie dla aplikacji i instalatora Windows.
+          Aktualizacja zachowuje portfele i PIN z 0.2.
           Testy i rzeczywisty test UI na Windows zakończone przed publikacją.
           Wersja eksperymentalna bez niezależnego audytu. Instalator bez Authenticode.
           Frazy seed i passphrase są kopią do odzyskania środków; PIN jest powiązany z urządzeniem.

@@ -46,3 +46,11 @@ test('switching wallet invalidates the previous immutable transaction quote',asy
 }));
 test('balance formatting removes only trailing decimal zeroes and retains tiny amounts',()=>{for(const v of ['0','0.0','0.00000000','0.000000000000000000'])assert.equal(numberText(v),'0');assert.equal(numberText('1.230000000'),'1,23');assert.equal(numberText('100.000'),'100');assert.equal(numberText('0.000000000000000001'),'0,000000000000000001');assert.equal(numberText(null),'Niedostępne');});
 test('asset order stays a complete permutation and can move in both directions',()=>{assert.deepEqual(normalizeOrder(['BTC','BTC','invalid']),['BTC','SOL','ETH']);assert.deepEqual(moveAsset(['SOL','ETH','BTC'],'BTC','SOL'),['BTC','SOL','ETH']);assert.deepEqual(moveAsset(['SOL','ETH','BTC'],'SOL','BTC'),['ETH','BTC','SOL']);});
+test('history rejects late wallet responses, caches per wallet and clears on lock',async()=>fixture(async s=>{
+ await s.initialize(pin);const a=await s.import({name:'A',mnemonic,passphrase:''});const b=await s.import({name:'B',mnemonic,passphrase:'B'});await s.switchWallet(a.activeWalletId!,'testnet');
+ const original=globalThis.fetch;let release!:()=>void,started!:()=>void;const gate=new Promise<void>(r=>release=r),request=new Promise<void>(r=>started=r);const urls:string[]=[];
+ globalThis.fetch=async input=>{const url=String(input);urls.push(url);if(url.includes('/txs')){started();await gate;return Response.json([]);}return new Response('100');};
+ try{const late=s.activity({network:'testnet',chain:'BTC'});await request;await s.switchWallet(b.activeWalletId!,'testnet');release();await assert.rejects(late,/uległy zmianie/);
+  await s.activity({network:'testnet',chain:'BTC'});const count=urls.length;await s.activity({network:'testnet',chain:'BTC'});assert.equal(urls.length,count);assert.ok(urls.some(url=>url.includes(b.accounts[2].address)));s.lock();await assert.rejects(s.activity({network:'testnet',chain:'BTC'}),/zablokowana/);
+ }finally{release();globalThis.fetch=original;}
+}));
