@@ -1,7 +1,7 @@
 name: Build Windows installer
 on:
   push:
-    branches: [main]
+    branches: [main, 'update/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       # workflows, credentials, binaries, or dependencies and is removed in the same commit.
       - name: Apply source upload
         id: source
-        if: hashFiles('wallet-source.zip') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: hashFiles('wallet-source.zip') != '' && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
         shell: pwsh
         run: |
           Expand-Archive -Path wallet-source.zip -DestinationPath . -Force
@@ -38,7 +38,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
           git commit -m 'Materialize FRAME Wallet source and remove transport archive'
-          git push origin HEAD:main
+          git push origin "HEAD:${{ github.ref_name }}"
           "initial=true" >> $env:GITHUB_OUTPUT
       - uses: actions/setup-node@v4
         with:
@@ -92,12 +92,21 @@ jobs:
           elseif (-not (git tag -l "v${version}")) { $tag = "v${version}" }
           else { $tag = "v${version}-build.${{ github.run_number }}" }
           $sha = git rev-parse HEAD
+          $versionBranch = "versions/v${version}"
+          $existing = git ls-remote --heads origin "refs/heads/$versionBranch"
+          if (-not $existing) {
+            git push origin "${sha}:refs/heads/$versionBranch"
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot preserve version branch' }
+          }
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
           Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets.
-          Wiele portfeli, jeden PIN aplikacji, migracja z 0.1 bez utraty portfela.
-          Menu profilu, poprawiony kontrast Alien Signal, kompaktowy pulpit.
-          Zmiana kolejności i rozmiarów kafelków; jednolity zapis zerowych sald.
+          Systemowy schowek z weryfikacją kopiowania adresów i hashy.
+          Cztery motywy: Pop Control, Alien Signal, Chroma Riot i Obsidian.
+          Oryginalne znaki SOL/ETH/BTC, logo F w sześciokącie i siatka heksagonalna.
+          Historia sieciowa z wpływami SOL/ETH/BTC, filtrami i widocznością pól.
+          Konfigurowalne płynne animacje, szybkość i intensywność ruchu.
+          Aktualizacja zachowuje portfele i PIN z 0.2.
           Testy i rzeczywisty test UI na Windows zakończone przed publikacją.
           Wersja eksperymentalna bez niezależnego audytu. Instalator bez Authenticode.
           Frazy seed i passphrase są kopią do odzyskania środków; PIN jest powiązany z urządzeniem.
