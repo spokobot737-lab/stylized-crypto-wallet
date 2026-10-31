@@ -1,4 +1,4 @@
-# Security / FRAME Wallet 0.2
+# Security / FRAME Wallet 0.3
 
 This is experimental, unaudited software. Start on test networks. Never submit a real seed in a GitHub issue or support message.
 
@@ -16,3 +16,5 @@ Do not publish vaults, seeds, screenshots of backups, signing keys or RPC creden
 Version 0.2 uses a collection vault (`app.vault`): one 6–12 digit application PIN plus a random 256-bit device secret protected by Electron async safeStorage. Scrypt derives the AES-256-GCM key from both; the device secret and all mnemonics are never sent to the renderer except explicit backup. There is no Linux basic_text or plaintext fallback. The session retains the derived collection key only while unlocked. PIN attempts are rate-limited with persisted delays; OS user-account compromise remains outside this protection. PIN change re-encrypts the complete collection atomically. The file is OS-profile-bound: recovery across devices requires each seed/passphrase.
 
 Migration reads the legacy password vault, creates the collection exclusively, preserves derivation paths and the original vault bytes, and associates legacy transaction history only with the migrated wallet. Other wallets have UUID-scoped history files. Switching wallets invalidates outstanding transaction drafts and balance requests. Signing checks both session epoch and active wallet ID. No repeated PIN is required to switch or send; the native immutable transaction confirmation remains mandatory. Seed backup and PIN change require PIN reauthentication.
+
+Version 0.3: the renderer can request copying public addresses/hashes only through validated IPC. The main process awaits the system clipboard write and verifies the readback; no generic clipboard-read API or seed-copy action is exposed. Network history uses only public addresses and bounded, timed, validated API responses, with partial-provider errors kept visible. Local broadcasts are not treated as confirmed. Session epochs reject stale history after wallet switch/lock. Public history includes native coins only, not token/NFT indexing.
