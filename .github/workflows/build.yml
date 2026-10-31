@@ -55,6 +55,25 @@ jobs:
         run: npx electron-builder --win nsis --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged Windows icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path 'release/win-unpacked/FRAME Wallet.exe').Path
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if (-not $icon) { throw 'Missing executable icon' }
+          $bitmap = $icon.ToBitmap()
+          $purple = 0
+          for ($y=0; $y -lt $bitmap.Height; $y++) {
+            for ($x=0; $x -lt $bitmap.Width; $x++) {
+              $pixel = $bitmap.GetPixel($x,$y)
+              if ($pixel.R -gt 130 -and $pixel.R -lt 230 -and $pixel.B -gt ($pixel.R+20) -and $pixel.G -lt ($pixel.B-20)) { $purple++ }
+            }
+          }
+          if ($purple -lt 5) { throw 'FRAME purple hexagon icon not found in executable' }
+          $bitmap.Save((Join-Path (Get-Location) 'docs/windows-app-icon.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+          $bitmap.Dispose()
+          $icon.Dispose()
       - name: SHA256 checksums
         shell: pwsh
         run: |
@@ -118,6 +137,8 @@ jobs:
           Oryginalne znaki SOL/ETH/BTC, logo F w sześciokącie i siatka heksagonalna.
           Historia sieciowa z wpływami SOL/ETH/BTC, filtrami i widocznością pól.
           Konfigurowalne płynne animacje, szybkość i intensywność ruchu.
+          Mainnet przy starcie, zapamiętywanie potwierdzenia przełączenia i Ustawienia.
+          Własna ikona F w sześciokącie dla aplikacji i instalatora Windows.
           Aktualizacja zachowuje portfele i PIN z 0.2.
           Testy i rzeczywisty test UI na Windows zakończone przed publikacją.
           Wersja eksperymentalna bez niezależnego audytu. Instalator bez Authenticode.
