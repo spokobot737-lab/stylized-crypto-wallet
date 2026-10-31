@@ -8,13 +8,15 @@ Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ram
 
 1. Zaloguj się do konta mającego dostęp do tego prywatnego repozytorium.
 2. Otwórz **Releases**, wybierz najnowsze wydanie i rozwiń **Assets**.
-3. Pobierz **FRAME-Wallet-0.3.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
-4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.3.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
+3. Pobierz **FRAME-Wallet-0.3.1-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
+4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.3.1-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
 5. Uruchom instalator na Windows 10/11 x64. Instalator nie ma podpisu Authenticode, ponieważ projekt nie zawiera certyfikatu wydawcy.
 
 Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy instalator jest też w artefakcie `FRAME-Wallet-Windows-x64`.
 
 ## Nowości 0.3
+
+Wydanie 0.3.1 poprawia pozycję ikon w historii i ujednolica nazwę Ustawienia w menu profilu. Poprzednie wydania pozostają dostępne.
 
 - Start aplikacji zawsze na Mainnet, również po restarcie z trybu testowego. W oknie przejścia z Testnet można zaznaczyć „Nie pokazuj ponownie”. Ustawienia → Ogólne → „Potwierdzaj przejście na Mainnet” przywraca lub wyłącza to okno. Nie zmienia potwierdzenia wysyłania środków.
 - Personalizacja jest w **Ustawienia → Wygląd**, bez osobnego przycisku w panelu bocznym. Profil również prowadzi do Ustawień.
