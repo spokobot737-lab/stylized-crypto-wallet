@@ -1,0 +1,5 @@
+export type Preferences={theme:'pop'|'alien';accent:'violet'|'cyan'|'lime'|'pink';density:'comfortable'|'compact';texture:boolean;motion:boolean;name:string};
+export const defaults:Preferences={theme:'pop',accent:'violet',density:'comfortable',texture:true,motion:true,name:'Mój portfel'};
+export function loadPreferences():Preferences{try{const p=JSON.parse(localStorage.getItem('frame:preferences')||'{}');return {theme:p.theme==='alien'?'alien':'pop',accent:['violet','cyan','lime','pink'].includes(p.accent)?p.accent:'violet',density:p.density==='compact'?'compact':'comfortable',texture:typeof p.texture==='boolean'?p.texture:true,motion:typeof p.motion==='boolean'?p.motion:true,name:typeof p.name==='string'?p.name.slice(0,32):defaults.name};}catch{return defaults;}}
+export function shorten(address:string){return `${address.slice(0,7)}…${address.slice(-6)}`;}
+export function numberText(text:string|null){if(text===null)return 'Niedostępne';const [whole,frac]=text.split('.');return `${Number(whole).toLocaleString('pl-PL')}${frac?','+frac.slice(0,8):''}`;}
