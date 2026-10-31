@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
       # One-time source bootstrap for the browser upload. The archive contains no
       # workflows, credentials, binaries, or dependencies and is removed in the same commit.
-      - name: Materialize initial source upload
+      - name: Apply source upload
         id: source
         if: hashFiles('wallet-source.zip') != '' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
@@ -50,7 +50,7 @@ jobs:
       - name: Typecheck and compile
         run: npm run build
       - name: Exercise real Electron runtime and renderer isolation
-        run: node scripts/smoke.mjs
+        run: node --import tsx scripts/smoke.mjs
       - name: Package Windows x64 NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -71,6 +71,11 @@ jobs:
             docs/*.png
           if-no-files-found: error
           retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FRAME-UI-previews
+          path: docs/*.png
+          if-no-files-found: error
       - name: Publish release with installer
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release) || steps.source.outputs.initial == 'true'
         shell: pwsh
@@ -81,18 +86,24 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           INITIAL_UPLOAD: ${{ steps.source.outputs.initial }}
         run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:REF_TYPE -eq 'tag') { $tag = $env:TAG_REF }
-          elseif ($env:INITIAL_UPLOAD -eq 'true') { $tag = 'v0.1.0' }
-          else { $tag = "v0.1.0-build.${{ github.run_number }}" }
+          elseif ($env:INITIAL_UPLOAD -eq 'true') { $tag = "v$version" }
+          else { $tag = "v$version-build.${{ github.run_number }}" }
           $sha = git rev-parse HEAD
-          $notes = @'
-          FRAME Wallet 0.1: Windows x64 experimental desktop wallet.
-          Download FRAME-Wallet-0.1.0-Setup-x64.exe and compare SHA256SUMS.txt.
-          Includes Pop Control / Alien Signal themes; SOL, ETH and BTC native transfers.
-          Defaults to Solana Devnet, Ethereum Sepolia and Bitcoin Testnet3.
-          This build has not received an independent security audit. Test networks first.
-          Installer is not Authenticode signed. No signing certificate was supplied.
-          '@
+          $notes = @"
+          FRAME Wallet $version: Windows x64.
+          Pobierz FRAME-Wallet-$version-Setup-x64.exe z Assets.
+          Wiele portfeli, jeden PIN aplikacji, migracja z 0.1 bez utraty portfela.
+          Menu profilu, poprawiony kontrast Alien Signal, kompaktowy pulpit.
+          Zmiana kolejności i rozmiarów kafelków; jednolity zapis zerowych sald.
+          Testy i rzeczywisty test UI na Windows zakończone przed publikacją.
+          Wersja eksperymentalna bez niezależnego audytu. Instalator bez Authenticode.
+          Frazy seed i passphrase są kopią do odzyskania środków; PIN jest powiązany z urządzeniem.
+          "@
           $notes | Out-File -FilePath release/notes.md -Encoding utf8
-          gh release create $tag --target $sha --title "FRAME Wallet $tag" --notes-file release/notes.md --prerelease release/*.exe release/SHA256SUMS.txt
+          $assets = @(Get-ChildItem release/*.exe | ForEach-Object { $_.FullName })
+          $assets += 'release/SHA256SUMS.txt'
+          $assets += @(Get-ChildItem docs/*.png | ForEach-Object { $_.FullName })
+          gh release create $tag --target $sha --title "FRAME Wallet $tag" --notes-file release/notes.md --prerelease @assets
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
