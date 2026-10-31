@@ -16,6 +16,10 @@ Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy inst
 
 ## Nowości 0.3
 
+- Start aplikacji zawsze na Mainnet, również po restarcie z trybu testowego. W oknie przejścia z Testnet można zaznaczyć „Nie pokazuj ponownie”. Ustawienia → Ogólne → „Potwierdzaj przejście na Mainnet” przywraca lub wyłącza to okno. Nie zmienia potwierdzenia wysyłania środków.
+- Personalizacja jest w **Ustawienia → Wygląd**, bez osobnego przycisku w panelu bocznym. Profil również prowadzi do Ustawień.
+- Własna ikona F w sześciokącie dla okna, EXE i instalatora Windows (wiele rozdzielczości ICO), pliki ICNS dla macOS i PNG dla Linux. Generowanie z geometrii SVG: `python scripts/generate-icons.py` z Pillow. CI publikuje instalator Windows x64.
+
 - Kopiowanie adresów i hashy przez systemowy schowek Electron; sukces dopiero po odczycie zwrotnym. Błąd zapisu jest widoczny. Dotyczy kart, odbioru i historii.
 - Cztery motywy, poprawne lokalne SVG kryptowalut, znak F w sześciokącie i subtelna siatka heksagonalna.
 - Historia aktywnego adresu obejmuje przychodzące, wychodzące i własne transfery natywnych SOL, ETH, BTC. Ethereum: również transfery wewnętrzne z Routescan. Solana: instrukcje systemowe, w tym wewnętrzne; inne operacje oznaczone jako zmiana salda. BTC: reszta nie jest liczona jako wysłana kwota; wieloadresowe wejścia są oznaczone jako zmiana salda.
@@ -54,7 +58,7 @@ Zainstaluj 0.3 nad dotychczasową aplikacją. Przy pierwszym uruchomieniu podaj 
 
 Obsługiwane są natywne SOL, ETH i BTC, jedno konto/adres na sieć w każdym portfelu. Brak SPL/ERC-20/NFT, dApps, WalletConnect, ENS, multisig, RBF fee bump i automatycznego wyszukiwania wszystkich kont z innych portfeli. Import frazy z innej aplikacji może wymagać dopasowania ścieżki; wersja 0.3 stosuje wyłącznie wymienione powyżej ścieżki. BTC używa jednego adresu odbioru/reszty, co ogranicza prywatność. Ethereum wysyła tylko na zwykłe konta bez kodu, SOL na adresy on-curve.
 
-Domyślne środowisko **testnet** oznacza Devnet dla SOL, Sepolia dla ETH i Testnet3 dla BTC. Publiczne węzły/API mogą mieć limity, przerwy i ograniczenia geograficzne. Dostawcy widzą adresy i IP, nigdy seed ani klucz prywatny. Historia w aplikacji korzysta z publicznych indeksów i RPC. Jej kompletność zależy od dostawców; szczegóły zweryfikujesz w eksploratorze. SPL/ERC-20/NFT nie są wykazywane.
+Domyślnie aplikacja uruchamia **Mainnet**. Tryb **Testnet** oznacza Devnet dla SOL, Sepolia dla ETH i Testnet3 dla BTC. Publiczne węzły/API mogą mieć limity, przerwy i ograniczenia geograficzne. Dostawcy widzą adresy i IP, nigdy seed ani klucz prywatny. Historia w aplikacji korzysta z publicznych indeksów i RPC. Jej kompletność zależy od dostawców; szczegóły zweryfikujesz w eksploratorze. SPL/ERC-20/NFT nie są wykazywane.
 
 ## Uruchomienie z kodu
 

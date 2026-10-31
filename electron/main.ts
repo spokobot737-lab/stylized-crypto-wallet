@@ -6,6 +6,7 @@ import { WalletService, networkSchema } from './service';
 import { explorer } from './chains';
 import { copyPublicText } from './clipboard';
 app.setName('FRAME Wallet');
+if(process.platform==='win32')app.setAppUserModelId('app.frame.wallet');
 protocol.registerSchemesAsPrivileged([{scheme:'frame',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 const dev=!app.isPackaged&&process.env.WALLET_DEV==='1';
 let window:BrowserWindow;let wallet:WalletService;let lastActivity=Date.now();
@@ -41,7 +42,7 @@ else app.whenReady().then(()=>{
  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>{
   const u=details.url;callback({cancel:!(u.startsWith('frame://app/')||(dev&&(u.startsWith('http://127.0.0.1:5173/')||u.startsWith('ws://127.0.0.1:5173/'))))});
  });
- window=new BrowserWindow({width:1440,height:960,minWidth:1000,minHeight:720,backgroundColor:'#101116',title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
+ window=new BrowserWindow({width:1440,height:960,minWidth:1000,minHeight:720,backgroundColor:'#101116',icon:join(__dirname,'../dist/app-icon.png'),title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
  window.setMenu(null);window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  window.webContents.on('will-navigate',(event,url)=>{if(url!==rendererUrl)event.preventDefault();});
  window.webContents.on('will-attach-webview',event=>event.preventDefault());

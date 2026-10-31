@@ -56,7 +56,7 @@ test('public history fetch preserves successful chains when another provider fai
  assert.equal(activityInput.safeParse({network:'testnet',cursor:'1'}).success,false);assert.equal(activityInput.safeParse({network:'testnet',chain:'ETH',cursor:'1'}).success,true);
 });
 test('v0.2 appearance settings migrate with new activity and motion defaults; invalid filters normalize',()=>{
- const original=Object.getOwnPropertyDescriptor(globalThis,'localStorage');Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>JSON.stringify({theme:'alien',assetOrder:['BTC','SOL','ETH'],motion:false})}});
- try{const p=loadPreferences();assert.equal(p.theme,'alien');assert.equal(p.motion,false);assert.equal(p.motionSpeed,'normal');assert.equal(p.activity.incoming,true);assert.deepEqual(p.assetOrder,['BTC','SOL','ETH']);}finally{if(original)Object.defineProperty(globalThis,'localStorage',original);else delete (globalThis as any).localStorage;}
+ const original=Object.getOwnPropertyDescriptor(globalThis,'localStorage');Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>JSON.stringify({theme:'alien',assetOrder:['BTC','SOL','ETH'],motion:false,confirmMainnet:false})}});
+ try{const p=loadPreferences();assert.equal(p.theme,'alien');assert.equal(p.motion,false);assert.equal(p.confirmMainnet,false);assert.equal(p.motionSpeed,'normal');assert.equal(p.activity.incoming,true);assert.deepEqual(p.assetOrder,['BTC','SOL','ETH']);}finally{if(original)Object.defineProperty(globalThis,'localStorage',original);else delete (globalThis as any).localStorage;}
  const p=readActivity({chains:['BTC','BTC','fake'],fields:{fee:true,hash:'yes'},visible:false});assert.deepEqual(p.chains,['BTC']);assert.equal(p.visible,false);assert.equal(p.fields.fee,true);assert.equal(p.fields.hash,false);
 });

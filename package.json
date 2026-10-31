@@ -69,15 +69,27 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "FRAME-Wallet-${version}-Setup-${arch}.${ext}"
+      "artifactName": "FRAME-Wallet-${version}-Setup-${arch}.${ext}",
+      "icon": "build/icons/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icons/icon.ico",
+      "uninstallerIcon": "build/icons/icon.ico",
+      "installerHeaderIcon": "build/icons/icon.ico"
     },
-    "publish": null
+    "publish": null,
+    "mac": {
+      "icon": "build/icons/icon.icns",
+      "category": "public.app-category.finance"
+    },
+    "linux": {
+      "icon": "build/icons/icon.png",
+      "category": "Finance"
+    }
   },
   "overrides": {
     "jayson": "^5.0.0"

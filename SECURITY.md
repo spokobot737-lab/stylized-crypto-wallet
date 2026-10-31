@@ -1,6 +1,6 @@
 # Security / FRAME Wallet 0.3
 
-This is experimental, unaudited software. Start on test networks. Never submit a real seed in a GitHub issue or support message.
+This is experimental, unaudited software. The application starts on Mainnet; switch to test networks for initial verification. Never submit a real seed in a GitHub issue or support message.
 
 Trust boundaries: OS CSPRNG → BIP39 → locally derived native chain keys. Seed/passphrase encrypted with authenticated AES-256-GCM and a fixed bounded scrypt cost. Private signing occurs only in Electron main, not the React bundle. Mnemonic is revealed to renderer only during initial backup or explicit PIN-authenticated backup, and never sent to network providers.
 
