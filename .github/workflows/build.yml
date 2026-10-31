@@ -77,7 +77,7 @@ jobs:
           path: docs/*.png
           if-no-files-found: error
       - name: Publish release with installer
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release) || steps.source.outputs.initial == 'true'
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,12 +88,13 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:REF_TYPE -eq 'tag') { $tag = $env:TAG_REF }
-          elseif ($env:INITIAL_UPLOAD -eq 'true') { $tag = "v$version" }
-          else { $tag = "v$version-build.${{ github.run_number }}" }
+          elseif ($env:INITIAL_UPLOAD -eq 'true') { $tag = "v${version}" }
+          elseif (-not (git tag -l "v${version}")) { $tag = "v${version}" }
+          else { $tag = "v${version}-build.${{ github.run_number }}" }
           $sha = git rev-parse HEAD
           $notes = @"
-          FRAME Wallet $version: Windows x64.
-          Pobierz FRAME-Wallet-$version-Setup-x64.exe z Assets.
+          FRAME Wallet ${version}: Windows x64.
+          Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets.
           Wiele portfeli, jeden PIN aplikacji, migracja z 0.1 bez utraty portfela.
           Menu profilu, poprawiony kontrast Alien Signal, kompaktowy pulpit.
           Zmiana kolejności i rozmiarów kafelków; jednolity zapis zerowych sald.
