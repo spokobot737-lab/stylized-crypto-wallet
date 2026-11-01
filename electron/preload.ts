@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { WalletAPI } from './types';
 async function call(name:string,...args:unknown[]){const result=await ipcRenderer.invoke(`wallet:${name}`,...args);if(!result.ok)throw new Error(result.error);return result.value;}
 const api:WalletAPI={
+ integrations:()=>call('integrations'),saveIntegrations:input=>call('saveIntegrations',input),configure:input=>call('configure',input),nfts:input=>call('nfts',input),nftImage:uri=>call('nftImage',uri),uploadMetadata:input=>call('uploadMetadata',input),usdc:network=>call('usdc',network),assetQuote:input=>call('assetQuote',input),assetSend:id=>call('assetSend',id),assetOperations:()=>call('assetOperations'),
  copyText:value=>call('copyText',value),activity:input=>call('activity',input),
  initialize:pin=>call('initialize',pin),migrate:input=>call('migrate',input),switchWallet:(id,network)=>call('switchWallet',id,network),renameWallet:(id,name,network)=>call('renameWallet',id,name,network),changePin:(oldPin,newPin)=>call('changePin',oldPin,newPin),
  status:network=>call('status',network),generate:()=>call('generate'),create:input=>call('create',input),import:input=>call('import',input),

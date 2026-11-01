@@ -1,6 +1,6 @@
 # FRAME Wallet
 
-Prywatny portfel desktopowy SOL / ETH / BTC. Electron + React + TypeScript + Tailwind CSS 4.
+Prywatny portfel desktopowy SOL / ETH / BTC / USDC oraz NFT Ethereum i Solana. Electron + React + TypeScript + Tailwind CSS 4.
 
 Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ramki, twarde cienie) i **Alien Signal** (ciemne panele, neonowe linie, siatka i monospace). Do tego **Chroma Riot** (róż, pomarańcz, fiolet) i **Obsidian** (czerń i srebro). Personalizacja obejmuje motyw, akcent Alien, gęstość, teksturę heksagonalną oraz szybkość i intensywność animacji.
 
@@ -8,13 +8,27 @@ Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ram
 
 1. Zaloguj się do konta mającego dostęp do tego prywatnego repozytorium.
 2. Otwórz **Releases**, wybierz najnowsze wydanie i rozwiń **Assets**.
-3. Pobierz **FRAME-Wallet-0.3.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
-4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.3.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
+3. Pobierz **FRAME-Wallet-0.4.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
+4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.4.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
 5. Uruchom instalator na Windows 10/11 x64. Instalator nie ma podpisu Authenticode, ponieważ projekt nie zawiera certyfikatu wydawcy.
 
 Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy instalator jest też w artefakcie `FRAME-Wallet-Windows-x64`.
 
-## Nowości 0.3
+## Nowości 0.4
+
+- **NFT → Posiadane / Odkrywaj / Utwórz**: Ethereum ERC-721/1155, Solana Core i Token Metadata. Odbiór pod adresem aktywnego portfela, szczegóły metadanych i wysyłanie. Eksploracja według adresu kolekcji lub konkretnego NFT nie wymaga jego posiadania.
+- **USDC**: saldo i wysyłanie na Ethereum Mainnet/Sepolia oraz Solana Mainnet/Devnet. Wyłącznie oficjalny USDC Circle, 6 miejsc dziesiętnych; USDC.e i inne tokeny o podobnej nazwie nie są obsługiwane. Opłaty wymagają ETH/SOL.
+- **Mintowanie**: pojedynczy NFT, pusta kolekcja i seria 1–20 NFT w istniejącej kolekcji. Ethereum korzysta z własnego `FrameCollection` ERC-721 (limit 10000), Solana z Metaplex Core. Dodawanie do kolekcji wymaga jej własności; Ethereum obsługuje tylko kolekcje utworzone w FRAME. Serie Solana to oddzielne transakcje: przy niepewnym wyniku aplikacja zatrzymuje serię i zapisuje hashe, bez automatycznego powtórzenia.
+- **Metadane**: własny URI JSON HTTPS/IPFS do 200 znaków albo jawne przesłanie grafiki PNG/JPEG/WebP do 5 MB i JSON do Pinata. Przesłane pliki są publiczne. Utworzenie metadanych nie wykonuje mintowania.
+- **Ustawienia → Ogólne**: przełącznik Mainnet/Testnet i język PL/EN. Domyślnie polski; język zapisuje się lokalnie. Każde uruchomienie wybiera Mainnet; zmiana środowiska unieważnia wyceny, dane i odpowiedzi poprzedniej sesji.
+- **Ustawienia → Integracje**: własne klucze Alchemy (indeks NFT Ethereum), Helius (DAS Solana) i opcjonalny token Pinata (IPFS). Klucze zapisują się lokalnie z ochroną systemową; formularz po zapisie jest czyszczony. Aplikacja nie zawiera wspólnych kluczy ani wymyślonych sald. Bez indeksu można sprawdzić konkretny NFT po adresie i ID; przegląd całego portfela wymaga odpowiedniego klucza.
+- Kontrakt i lokalne testy EVM: `contracts/FrameCollection.sol`, `scripts/compile-contract.mjs`, `tests/assets.test.ts`. Adaptery dostawców i podpisywanie: `electron/assets/`; interfejs: `src/components/NftDashboard.tsx`, `MintPanel.tsx`, `AssetOperation.tsx`, `UsdcPanel.tsx`; tłumaczenia: `shared/en.json` i `shared/i18n.ts`.
+
+Dokumentacja integracji: [Alchemy](https://www.alchemy.com/docs/reference/nft-api-endpoints/nft-api-endpoints/nft-ownership-endpoints/get-nf-ts-for-owner-v-3), [Helius DAS](https://www.helius.dev/docs/api-reference/das/getassetsbyowner), [Metaplex Core](https://www.metaplex.com/docs/smart-contracts/core/create-asset), [Pinata](https://docs.pinata.cloud/api-reference/endpoint/upload-a-file), [adresy USDC Circle](https://developers.circle.com/stablecoins/usdc-contract-addresses).
+
+Aktualizacja zachowuje sejf, wspólny PIN i dotychczasowy układ. Obejmuje też poprawkę geometrii ikon historii z 0.3.1.
+
+## Funkcje 0.3
 
 - Start aplikacji zawsze na Mainnet, również po restarcie z trybu testowego. W oknie przejścia z Testnet można zaznaczyć „Nie pokazuj ponownie”. Ustawienia → Ogólne → „Potwierdzaj przejście na Mainnet” przywraca lub wyłącza to okno. Nie zmienia potwierdzenia wysyłania środków.
 - Personalizacja jest w **Ustawienia → Wygląd**, bez osobnego przycisku w panelu bocznym. Profil również prowadzi do Ustawień.
@@ -29,7 +43,7 @@ Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy inst
 - Płynne przejścia paneli, dialogów i układu kart; ustawienia szybkości/intensywności, pełne wyłączenie i respektowanie `prefers-reduced-motion`.
 - Test Windows sprawdza rzeczywisty schowek OS i UI na deterministycznych, wyłącznie testowych odpowiedziach historii. Nie wysyła środków. Zrzuty w Releases zawierają dane testowe.
 
-Zainstaluj 0.3 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zostają zachowane, nie ma nowej migracji sejfu.
+Zainstaluj 0.4 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zostają zachowane, nie ma nowej migracji sejfu.
 
 ## Funkcje odziedziczone z 0.2
 
@@ -50,15 +64,15 @@ Zainstaluj 0.3 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zost
 
 ## Aktualizacja z 0.1
 
-Zainstaluj 0.3 nad dotychczasową aplikacją. Przy pierwszym uruchomieniu podaj **dotychczasowe hasło jeden raz** i wybierz PIN aplikacji. Adresy, seed, passphrase i historia pierwszego portfela są zachowane. Stary zaszyfrowany plik `wallet.vault` pozostaje nienaruszony jako kopia; nowy sejf to `app.vault`. Nowe portfele mają osobne pliki lokalnej historii. Nie przenoś samego `app.vault` na inny profil Windows: jest powiązany z systemowym magazynem kluczy. Do przywrócenia na innym urządzeniu użyj seeda i passphrase każdego portfela. Wersja 0.1 nie rozumie nowych portfeli utworzonych w 0.2.
+Zainstaluj 0.4 nad dotychczasową aplikacją. Przy pierwszym uruchomieniu podaj **dotychczasowe hasło jeden raz** i wybierz PIN aplikacji. Adresy, seed, passphrase i historia pierwszego portfela są zachowane. Stary zaszyfrowany plik `wallet.vault` pozostaje nienaruszony jako kopia; nowy sejf to `app.vault`. Nowe portfele mają osobne pliki lokalnej historii. Nie przenoś samego `app.vault` na inny profil Windows: jest powiązany z systemowym magazynem kluczy. Do przywrócenia na innym urządzeniu użyj seeda i passphrase każdego portfela. Wersja 0.1 nie rozumie nowych portfeli utworzonych w 0.2.
 
 ## Zakres i ograniczenia
 
 **Eksperymentalny hot wallet, bez niezależnego audytu.** Najpierw sprawdź sieci testowe i odzyskanie adresów z kopii. Nie jest to portfel sprzętowy. Złośliwe oprogramowanie urządzenia może odczytać dane podczas odblokowania; JavaScript nie gwarantuje wymazania wszystkich kopii stringów/kluczy w pamięci.
 
-Obsługiwane są natywne SOL, ETH i BTC, jedno konto/adres na sieć w każdym portfelu. Brak SPL/ERC-20/NFT, dApps, WalletConnect, ENS, multisig, RBF fee bump i automatycznego wyszukiwania wszystkich kont z innych portfeli. Import frazy z innej aplikacji może wymagać dopasowania ścieżki; wersja 0.3 stosuje wyłącznie wymienione powyżej ścieżki. BTC używa jednego adresu odbioru/reszty, co ogranicza prywatność. Ethereum wysyła tylko na zwykłe konta bez kodu, SOL na adresy on-curve.
+Obsługiwane są natywne SOL, ETH i BTC, jedno konto/adres na sieć w każdym portfelu. Pozostałe SPL/ERC-20, Polygon/Base, handel na marketplace, dApps, WalletConnect, ENS, multisig, RBF i automatyczne wyszukiwanie wszystkich kont nie są obsługiwane. Skompresowane NFT Solana są tylko do odczytu. Ograniczenia lub dodatkowa autoryzacja konkretnego NFT mogą uniemożliwić transfer; aplikacja blokuje go po nieudanej symulacji. Import frazy z innej aplikacji może wymagać dopasowania ścieżki; wersja 0.4 stosuje wyłącznie wymienione powyżej ścieżki. BTC używa jednego adresu odbioru/reszty, co ogranicza prywatność. Ethereum wysyła tylko na zwykłe konta bez kodu, SOL na adresy on-curve.
 
-Domyślnie aplikacja uruchamia **Mainnet**. Tryb **Testnet** oznacza Devnet dla SOL, Sepolia dla ETH i Testnet3 dla BTC. Publiczne węzły/API mogą mieć limity, przerwy i ograniczenia geograficzne. Dostawcy widzą adresy i IP, nigdy seed ani klucz prywatny. Historia w aplikacji korzysta z publicznych indeksów i RPC. Jej kompletność zależy od dostawców; szczegóły zweryfikujesz w eksploratorze. SPL/ERC-20/NFT nie są wykazywane.
+Domyślnie aplikacja uruchamia **Mainnet**. Tryb **Testnet** oznacza Devnet dla SOL, Sepolia dla ETH i Testnet3 dla BTC. Publiczne węzły/API mogą mieć limity, przerwy i ograniczenia geograficzne. Dostawcy widzą adresy i IP, nigdy seed ani klucz prywatny. Historia w aplikacji korzysta z publicznych indeksów i RPC. Jej kompletność zależy od dostawców; szczegóły zweryfikujesz w eksploratorze. Historia natywnych monet nie indeksuje wszystkich operacji tokenów/NFT. Lokalne wysyłki NFT/USDC mają osobny dziennik; ich końcowy wynik należy sprawdzić w eksploratorze. Indeksy NFT mogą aktualizować własność z opóźnieniem.
 
 ## Uruchomienie z kodu
 
@@ -97,3 +111,5 @@ Każda aktualizacja powstaje na osobnym branchu `update/X.Y.Z` i trafia do `main
 - **Pull requests**: historia zmian i wyników testów kolejnych aktualizacji.
 
 Nie usuwaj starych tagów ani branchy `versions/*`. Uruchamianie starego instalatora nie jest migracją danych wstecz; przywracanie dostępu do środków wymaga seedów i passphrase.
+
+Konwersje liczb SPL używają lokalnego modułu `vendor/bigint-buffer` bez natywnego dodatku `bigint-buffer` (CVE-2025-3194). Ganache jest wyłącznie zależnością testową i nie trafia do instalatora. Testy EVM działają na lokalnym łańcuchu, a Solana i dostawcy na kontrolowanych odpowiedziach; nie stanowią testu na finansowanych sieciach publicznych.
