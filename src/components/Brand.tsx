@@ -1,2 +1,6 @@
-export function HexMark({className=''}:{className?:string}){return <svg className={`hex-mark ${className}`} viewBox="0 0 64 72" fill="none" aria-hidden="true"><path className="hex-outline" d="M32 3 59 18.5v31L32 65 5 49.5v-31Z" stroke="currentColor" strokeWidth="3"/><path className="hex-inner" d="m32 9 21.8 12.5v25L32 59 10.2 46.5v-25Z" stroke="currentColor" strokeWidth=".6" opacity=".45"/><path d="M21 21h25v7H29v7h13v7H29v12h-8V21Z" fill="currentColor"/><path d="m5 18.5 6 3.5M59 49.5l-6-3.5" stroke="currentColor" strokeWidth="3"/></svg>;}
-export function Brand({compact=false}:{compact?:boolean}){return <div className={`frame-brand ${compact?'brand-compact':''}`} aria-label="FRAME Wallet"><HexMark/><div className="brand-word"><strong>FRAME</strong><span>WALLET</span></div></div>;}
+export function HexMark({ className = '' }: {
+    className?: string;
+}) { return <svg className={`hex-mark ${className}`} viewBox="0 0 64 72" fill="none" aria-hidden="true"><path className="hex-outline" d="M32 3 59 18.5v31L32 65 5 49.5v-31Z" stroke="currentColor" strokeWidth="3"/><path className="hex-inner" d="m32 9 21.8 12.5v25L32 59 10.2 46.5v-25Z" stroke="currentColor" strokeWidth=".6" opacity=".45"/><path d="M21 21h25v7H29v7h13v7H29v12h-8V21Z" fill="currentColor"/><path d="m5 18.5 6 3.5M59 49.5l-6-3.5" stroke="currentColor" strokeWidth="3"/></svg>; }
+export function Brand({ compact = false }: {
+    compact?: boolean;
+}) { return <div className={`frame-brand ${compact ? 'brand-compact' : ''}`} aria-label="FRAME Wallet"><HexMark /><div className="brand-word"><strong>FRAME</strong><span>WALLET</span></div></div>; }

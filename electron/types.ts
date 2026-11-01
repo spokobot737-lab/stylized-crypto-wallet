@@ -1,3 +1,4 @@
+import type { AssetsAPI } from './assets/types';
 export type Chain = 'SOL' | 'ETH' | 'BTC';
 export type Network = 'mainnet' | 'testnet';
 export type Account = { chain: Chain; address: string; path: string; networkLabel: string };
@@ -9,7 +10,7 @@ export type ActivityDirection='in'|'out'|'self'|'other';
 export type ActivityItem={id:string;hash:string;chain:Chain;network:Network;networkLabel:string;direction:ActivityDirection;amount:string;attemptedAmount?:string;from:string[];to:string[];fee:string|null;feePaidByWallet:boolean;at:number|null;status:'confirmed'|'pending'|'failed'|'unknown';confirmations:number|null;block:number|null;source:'network'|'local';kind:string;amountBasis:'transfer'|'balance-change';explorer:string};
 export type ActivityCursor={SOL?:string|null;ETH?:string|null;BTC?:string|null};
 export type ActivityPage={items:ActivityItem[];next:ActivityCursor;warnings:{chain:Chain;message:string}[];fetchedAt:number};
-export interface WalletAPI {
+export interface WalletAPI extends AssetsAPI {
  copyText(value:string):Promise<void>;
  activity(input:{network:Network;chain?:Chain;cursor?:string}):Promise<ActivityPage>;
  status(network: Network): Promise<Status>;
