@@ -17,7 +17,7 @@ import type { Network } from '../types';
 
 const chain=z.enum(['ETH','SOL']),network=z.enum(['mainnet','testnet']);
 const positive=z.string().regex(/^[1-9]\d{0,77}$/).refine(v=>/^[1-9]\d{0,77}$/.test(v)&&BigInt(v)<2n**256n,'Nieprawidłowa ilość.');
-const uri=z.string().min(1).max(200).refine(v=>{try{metadataUrl(v);return true;}catch{return false;}},'Wymagany jest publiczny adres HTTPS lub IPFS.');
+const uri=z.string().min(1).max(200).refine(v=>Buffer.byteLength(v,'utf8')<=200,'Adres metadanych przekracza 200 bajtów.').refine(v=>{try{metadataUrl(v);return true;}catch{return false;}},'Wymagany jest publiczny adres HTTPS lub IPFS.');
 const name=z.string().trim().min(1).max(32);
 export const intentSchema=z.discriminatedUnion('kind',[
  z.object({kind:z.literal('usdc'),chain,network,to:z.string().max(128),amount:z.string().max(40)}).strict(),
@@ -55,7 +55,7 @@ async function prepareEvm(seed:Buffer,intent:AssetIntent):Promise<AssetPrepared>
    const entries=intent.mode==='single'?[{name:intent.name,uri:intent.uri}]:intent.items;
    if(intent.mode==='batch'){
     if(!isAddress(intent.collection!))throw new Error('Nieprawidłowy adres kolekcji.');to=getAddress(intent.collection!);if(!collectionCodeMatches(await p.getCode(to)))throw new Error('Mintowanie zbiorcze obsługuje kolekcje utworzone w FRAME.');const c=new Contract(to,collectionArtifact.abi,p);if((await c.owner()).toLowerCase()!==from.toLowerCase())throw new Error('Aktywny portfel nie zarządza tą kolekcją.');data=c.interface.encodeFunctionData('mintMany',[entries.map(item=>item.uri)]);title=`Utwórz NFT w kolekcji (${entries.length})`;
-   }else{const factory=new ContractFactory(collectionArtifact.abi,collectionArtifact.bytecode);data=String((await factory.getDeployTransaction(intent.name,intent.symbol,intent.mode==='single'?1:10000,entries.map(item=>item.uri))).data);deployment=true;title=intent.mode==='collection'?'Utwórz kolekcję Ethereum':'Utwórz NFT Ethereum';}
+   }else{const factory=new ContractFactory(collectionArtifact.abi,collectionArtifact.bytecode);data=String((await factory.getDeployTransaction(intent.name,intent.symbol,intent.mode==='single'?1:10000,intent.uri,entries.map(item=>item.uri))).data);deployment=true;title=intent.mode==='collection'?'Utwórz kolekcję Ethereum':'Utwórz NFT Ethereum';}
    details=[`Nazwa: ${intent.name}`,`Symbol: ${intent.symbol}`,`Liczba NFT: ${entries.length}`,...entries.map((item,i)=>`${i+1}. ${item.name}: ${item.uri}`)];if(intent.mode==='collection')details.push('Pusta kolekcja; NFT dodasz w trybie seryjnym. Limit podaży: 10000.');
   }
   const contractTarget=deployment?undefined:intent.kind==='usdc'?USDC[intent.network].ETH:intent.kind==='nft'?getAddress(intent.address):to;

@@ -7,12 +7,15 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// Kolekcja z niezmiennymi adresami metadanych i limitem podaży.
 contract FrameCollection is ERC721URIStorage, Ownable, ReentrancyGuard {
+    string public contractURI;
     uint256 public totalMinted;
     uint256 public immutable maxSupply;
 
-    constructor(string memory nazwa, string memory symbol, uint256 limit, string[] memory adresy)
+    constructor(string memory nazwa, string memory symbol, uint256 limit, string memory metadane, string[] memory adresy)
         ERC721(nazwa, symbol) Ownable(msg.sender) {
         require(limit > 0 && limit <= 10000, "Nieprawidlowy limit");
+        require(bytes(metadane).length > 0 && bytes(metadane).length <= 200, "Nieprawidlowy URI");
+        contractURI = metadane;
         maxSupply = limit;
         _mintMany(adresy);
     }
