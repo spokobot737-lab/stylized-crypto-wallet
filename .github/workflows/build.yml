@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: 'Publish a private prerelease with the installer'
+        description: 'Publish a public prerelease with the installer'
         type: boolean
         default: true
 permissions:
@@ -51,6 +51,8 @@ jobs:
         run: npm run build
       - name: Exercise real Electron runtime and renderer isolation
         run: node --import tsx scripts/smoke.mjs
+      - name: Verify Frame Chat, media and responsive layout in Electron
+        run: node scripts/ui-smoke-060.mjs
       - name: Package Windows x64 NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -131,18 +133,15 @@ jobs:
           }
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
-          Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets.
-          Systemowy schowek z weryfikacją kopiowania adresów i hashy.
-          Cztery motywy: Pop Control, Alien Signal, Chroma Riot i Obsidian.
-          Oryginalne znaki SOL/ETH/BTC, logo F w sześciokącie i siatka heksagonalna.
-          Historia sieciowa z wpływami SOL/ETH/BTC, filtrami i widocznością pól.
-          Konfigurowalne płynne animacje, szybkość i intensywność ruchu.
-          Mainnet przy starcie, zapamiętywanie potwierdzenia przełączenia i Ustawienia.
-          Własna ikona F w sześciokącie dla aplikacji i instalatora Windows.
-          Aktualizacja zachowuje portfele i PIN z 0.2.
-          Testy i rzeczywisty test UI na Windows zakończone przed publikacją.
-          Wersja eksperymentalna bez niezależnego audytu. Instalator bez Authenticode.
-          Frazy seed i passphrase są kopią do odzyskania środków; PIN jest powiązany z urządzeniem.
+          Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets. Archiwum Source code zawiera źródła, bez gotowego EXE.
+          Poprawiona chronologia NIP-17, jednokierunkowe prośby o kontakt, prywatne nicki i awatary, małe obrazy E2EE.
+          Regulowane panele czatu, widok NFT wszystkich sieci i resolver SVG/data/IPFS, trwała paginowana aktywność.
+          Stablecoiny, widoczność widżetów i ruch Sześciokąty/Płynny/Wyłączone. Zachowane portfele, PIN, klucze i historia.
+          Opis testów na dwóch kontach, przyczyn i ograniczeń: docs/0.6.0-TESTING.md w źródłach tego wydania.
+          Moduły czatu odtworzono z rzeczywistego pakietu 0.5.0, następnie rozwinięto. Pochodzenie: docs/SOURCE-RECOVERY.md.
+          Testy automatyczne, test rzeczywistego Electron i kontrola zależności pakietu na Windows zakończone przed publikacją.
+          Nie testowano pełnego procesu instalowania NSIS na prywatnym komputerze. Instalator bez Authenticode.
+          Bezpłatne relaye/RPC/indexery nie gwarantują dostępności, retencji ani kompletnej historii. Obrazy Frame Chat są własnym małym rozszerzeniem, bez zewnętrznego hostingu.
           "@
           $notes | Out-File -FilePath release/notes.md -Encoding utf8
           $assets = @(Get-ChildItem release/*.exe | ForEach-Object { $_.FullName })
