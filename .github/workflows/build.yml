@@ -53,6 +53,10 @@ jobs:
         run: node --import tsx scripts/smoke.mjs
       - name: Verify Frame Chat, media and responsive layout in Electron
         run: node scripts/ui-smoke-060.mjs
+      - name: Verify FRAME Run controls and responsive canvas
+        run: node scripts/ui-frame-run.mjs
+      - name: Verify FRAME Run inside Frame Wallet
+        run: node scripts/ui-frame-run-wallet.mjs
       - name: Package Windows x64 NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -134,6 +138,8 @@ jobs:
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
           Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets. Archiwum Source code zawiera źródła, bez gotowego EXE.
+          FRAME Run wbudowane w aplikację: trening, rundy do 90 sekund i sterowanie spacją, kliknięciem lub dotykiem.
+          Punkty FRAME wymagają skonfigurowania oddzielnego serwera i konta. Serwer Node/SQLite i instrukcja: docs/FRAME-RUN.md. Publiczna usługa punktów nie jest wdrożona.
           Poprawiona chronologia NIP-17, jednokierunkowe prośby o kontakt, prywatne nicki i awatary, małe obrazy E2EE.
           Regulowane panele czatu, widok NFT wszystkich sieci i resolver SVG/data/IPFS, trwała paginowana aktywność.
           Stablecoiny, widoczność widżetów i ruch Sześciokąty/Płynny/Wyłączone. Zachowane portfele, PIN, klucze i historia.
