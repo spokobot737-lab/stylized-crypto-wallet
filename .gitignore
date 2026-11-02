@@ -9,3 +9,8 @@ test-results/
 *.vault
 
 tests/.generated/
+
+# Local FRAME Run server ledger and sidecars
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

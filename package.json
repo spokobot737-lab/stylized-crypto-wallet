@@ -1,8 +1,8 @@
 {
   "name": "stylized-crypto-wallet",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "FRAME Wallet • a personal multi-chain desktop wallet",
+  "description": "FRAME Wallet \u2022 a personal multi-chain desktop wallet",
   "author": "spokobot737-lab",
   "license": "UNLICENSED",
   "type": "module",
@@ -15,7 +15,10 @@
     "build": "npm run build:contract && npm run typecheck && vite build && npm run build:electron",
     "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "preview": "vite --host 127.0.0.1",
-    "build:contract": "node scripts/compile-contract.mjs"
+    "build:contract": "node scripts/compile-contract.mjs",
+    "game:server": "node --import tsx server/frame-run/main.ts",
+    "test:game": "node --import tsx --test tests/frame-run*.test.ts",
+    "test:game:ui": "npm run build && node scripts/ui-frame-run.mjs && node scripts/ui-frame-run-wallet.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "^1.10.0",

@@ -11,6 +11,7 @@ export type ActivityItem={asset?:{standard:string;address:string;tokenId?:string
 export type ActivityCursor={SOL?:string|null;ETH?:string|null;BTC?:string|null};
 export type ActivityPage={unavailable?:Chain[];items:ActivityItem[];next:ActivityCursor;warnings:{chain:Chain;message:string}[];fetchedAt:number};
 export interface WalletAPI extends AssetsAPI {
+ frameRun(input:{action:string;[key:string]:unknown}):Promise<any>;
  chat(input:{walletId:string;action:string;[key:string]:unknown}):Promise<any>;
  copyChat(value:string):Promise<void>;
  chatImage(value:string,avatar:boolean):Promise<string>;

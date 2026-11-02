@@ -1,3 +1,4 @@
+import {FrameRunBridge} from './frame-run';
 import {normalizeChatImage} from './chat/images';
 import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor, safeStorage, clipboard } from 'electron';
 import { join, resolve, sep, extname } from 'node:path';
@@ -13,17 +14,17 @@ if(!app.isPackaged&&process.env.FRAME_TEST_DIR){app.setPath('userData',process.e
 if(process.platform==='win32')app.setAppUserModelId('app.frame.wallet');
 protocol.registerSchemesAsPrivileged([{scheme:'frame',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 const dev=!app.isPackaged&&process.env.WALLET_DEV==='1';
-let window:BrowserWindow;let wallet:WalletService;let lastActivity=Date.now();
+let window:BrowserWindow;let wallet:WalletService;let frameRun:FrameRunBridge;let lastActivity=Date.now();
 const rendererUrl=dev?'http://127.0.0.1:5173/':'frame://app/index.html';
 function trusted(event:Electron.IpcMainInvokeEvent){
  if(event.sender!==window.webContents||event.senderFrame!==window.webContents.mainFrame)throw new Error('Niedozwolone źródło IPC.');
  const url=event.senderFrame.url;if(dev?!url.startsWith('http://127.0.0.1:5173/'):!url.startsWith('frame://app/'))throw new Error('Niedozwolony dokument.');
 }
 function handle(name:string,fn:(...args:any[])=>unknown){ipcMain.handle(`wallet:${name}`,async(event,...args)=>{
- trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if((name!=='chat'||args[0]?.action!=='view')&&['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','configure','chat','chatImage','copyChat'].includes(name))lastActivity=Date.now();
+ trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if((name!=='chat'||args[0]?.action!=='view')&&(name!=='frameRun'||args[0]?.action!=='status')&&['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','configure','chat','chatImage','copyChat','frameRun'].includes(name))lastActivity=Date.now();
  try{return {ok:true,value:await fn(...args)};}catch(error){const message=error instanceof z.ZodError?'Nieprawidłowe dane wejściowe.':error instanceof Error?error.message:'Operacja nie powiodła się.';return {ok:false,error:message.replace(/https?:\/\/\S+/g,'[adres usługi]')};}
 });}
-function lock(){wallet.lock();window?.webContents.send('wallet:locked');}
+function lock(){void frameRun?.interrupt();wallet.lock();window?.webContents.send('wallet:locked');}
 if(!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(()=>{
  protocol.handle('frame',async request=>{
@@ -39,6 +40,7 @@ else app.whenReady().then(()=>{
   async open(bytes:Buffer){if(!await safeStorage.isAsyncEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('Systemowy magazyn kluczy jest niedostępny.');return (await safeStorage.decryptStringAsync(bytes)).result;}
  };
  wallet=new WalletService(app.getPath('userData'),protector,undefined,normalizeChatImage);
+ frameRun=new FrameRunBridge(app.getPath('userData'),protector,()=>wallet.status('mainnet').unlocked);handle('frameRun',input=>frameRun.call(input));
  const t=(value:string)=>translate(value,wallet.integrations.language);
  session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  session.defaultSession.setPermissionCheckHandler(()=>false);
