@@ -7,3 +7,5 @@ release/
 coverage/
 test-results/
 *.vault
+
+tests/.generated/

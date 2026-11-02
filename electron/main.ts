@@ -1,3 +1,4 @@
+import {normalizeChatImage} from './chat/images';
 import { app, BrowserWindow, ipcMain, session, dialog, shell, protocol, powerMonitor, safeStorage, clipboard } from 'electron';
 import { join, resolve, sep, extname } from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -19,7 +20,7 @@ function trusted(event:Electron.IpcMainInvokeEvent){
  const url=event.senderFrame.url;if(dev?!url.startsWith('http://127.0.0.1:5173/'):!url.startsWith('frame://app/'))throw new Error('Niedozwolony dokument.');
 }
 function handle(name:string,fn:(...args:any[])=>unknown){ipcMain.handle(`wallet:${name}`,async(event,...args)=>{
- trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if(['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','configure'].includes(name))lastActivity=Date.now();
+ trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if((name!=='chat'||args[0]?.action!=='view')&&['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','configure','chat','chatImage','copyChat'].includes(name))lastActivity=Date.now();
  try{return {ok:true,value:await fn(...args)};}catch(error){const message=error instanceof z.ZodError?'Nieprawidłowe dane wejściowe.':error instanceof Error?error.message:'Operacja nie powiodła się.';return {ok:false,error:message.replace(/https?:\/\/\S+/g,'[adres usługi]')};}
 });}
 function lock(){wallet.lock();window?.webContents.send('wallet:locked');}
@@ -37,7 +38,7 @@ else app.whenReady().then(()=>{
   async seal(text:string){if(!await safeStorage.isAsyncEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('Systemowy magazyn kluczy jest niedostępny. PIN wymaga ochrony systemowej.');return safeStorage.encryptStringAsync(text);},
   async open(bytes:Buffer){if(!await safeStorage.isAsyncEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('Systemowy magazyn kluczy jest niedostępny.');return (await safeStorage.decryptStringAsync(bytes)).result;}
  };
- wallet=new WalletService(app.getPath('userData'),protector);
+ wallet=new WalletService(app.getPath('userData'),protector,undefined,normalizeChatImage);
  const t=(value:string)=>translate(value,wallet.integrations.language);
  session.defaultSession.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
  session.defaultSession.setPermissionCheckHandler(()=>false);
@@ -45,15 +46,18 @@ else app.whenReady().then(()=>{
  session.defaultSession.webRequest.onBeforeRequest((details,callback)=>{
   const u=details.url;callback({cancel:!(u.startsWith('frame://app/')||(dev&&(u.startsWith('http://127.0.0.1:5173/')||u.startsWith('ws://127.0.0.1:5173/'))))});
  });
- window=new BrowserWindow({width:1440,height:960,minWidth:1000,minHeight:720,backgroundColor:'#101116',icon:join(__dirname,'../dist/app-icon.png'),title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
+ window=new BrowserWindow({width:1440,height:960,minWidth:640,minHeight:720,backgroundColor:'#101116',icon:join(__dirname,'../dist/app-icon.png'),title:'FRAME Wallet',autoHideMenuBar:true,webPreferences:{preload:join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true,devTools:dev,spellcheck:false}});
  window.setMenu(null);window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  window.webContents.on('will-navigate',(event,url)=>{if(url!==rendererUrl)event.preventDefault();});
  window.webContents.on('will-attach-webview',event=>event.preventDefault());
  window.webContents.on('before-input-event',()=>{lastActivity=Date.now();});
  powerMonitor.on('lock-screen',lock);powerMonitor.on('suspend',lock);window.on('closed',()=>wallet.lock());
  handle('integrations',()=>wallet.integrationStatus());handle('saveIntegrations',input=>wallet.saveIntegrations(input));handle('configure',input=>wallet.configure(input));
- handle('nfts',input=>wallet.nfts(input));handle('nftImage',uri=>wallet.nftImage(uri));handle('uploadMetadata',input=>wallet.uploadMetadata(input));handle('usdc',network=>wallet.usdc(network));handle('assetQuote',input=>wallet.assetQuote(input));handle('assetOperations',()=>wallet.assetOperations());
+ handle('nfts',input=>wallet.nfts(input));handle('nftImage',(uri,retry)=>wallet.nftImage(uri,z.boolean().optional().parse(retry)));handle('uploadMetadata',input=>wallet.uploadMetadata(input));handle('usdc',network=>wallet.usdc(network));handle('assetQuote',input=>wallet.assetQuote(input));handle('assetOperations',()=>wallet.assetOperations());
  handle('assetSend',id=>wallet.assetSend(id,async quote=>{const result=await dialog.showMessageBox(window,{type:'warning',title:t('FRAME · Potwierdź operację'),message:t(quote.title),detail:[t(`Sieć: ${quote.chain} ${quote.network}`),t(`Nadawca: ${quote.from}`),...quote.details.map(t),`${t(quote.feeLabel)}: ${quote.fee}`,t(`Liczba transakcji: ${quote.transactions}`),t('Operacja jest nieodwracalna.')].join('\n'),buttons:[t('Anuluj'),t('Podpisz i wykonaj')],defaultId:0,cancelId:0,noLink:true});return result.response===1;}));
+ handle('chat',input=>wallet.chat(input,async text=>{const result=await dialog.showMessageBox(window,{type:'question',title:t('FRAME · Aktywuj czat'),message:t('Podpisz upoważnienie klucza czatu'),detail:text,buttons:[t('Anuluj'),t('Podpisz wiadomość')],defaultId:0,cancelId:0,noLink:true});return result.response===1;}));
+ handle('chatImage',(value,avatar)=>{if(!wallet.status('mainnet').unlocked)throw Error('Aplikacja jest zablokowana.');return normalizeChatImage(z.string().max(5600000).parse(value),z.boolean().parse(avatar));});
+ handle('copyChat',async value=>{if(!wallet.status('mainnet').unlocked)throw Error('Aplikacja jest zablokowana.');if(typeof value!=='string'||value.length>24000||!/^framechat(?:-key)?1:[A-Za-z0-9_-]+$/.test(value))throw Error('Nieprawidłowe dane czatu.');await clipboard.writeText(value);if(await clipboard.readText()!==value)throw Error('Nie udało się skopiować.');});
  handle('status',network=>wallet.status(networkSchema.parse(network)));handle('generate',()=>wallet.generate());
  handle('initialize',pin=>wallet.initialize(pin));handle('migrate',input=>wallet.migrate(input));
  handle('switchWallet',(id,network)=>wallet.switchWallet(id,network));handle('renameWallet',(id,name,network)=>wallet.renameWallet(id,name,network));handle('changePin',(oldPin,newPin)=>wallet.changePin(oldPin,newPin));

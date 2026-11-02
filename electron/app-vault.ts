@@ -2,7 +2,7 @@ import { randomBytes, scrypt as scryptCallback, createCipheriv, createDecipheriv
 import { z } from 'zod';
 export interface DeviceProtector { seal(text:string):Promise<Buffer>; open(bytes:Buffer):Promise<string>; }
 export const pinSchema=z.string().regex(/^\d{6,12}$/, 'PIN musi zawierać od 6 do 12 cyfr.');
-export const storedWalletSchema=z.object({id:z.string().uuid(),name:z.string().trim().min(1).max(32),mnemonic:z.string().max(512),passphrase:z.string().max(256),legacyHistory:z.boolean().optional()}).strict();
+export const storedWalletSchema=z.object({id:z.string().uuid(),name:z.string().trim().min(1).max(32),mnemonic:z.string().max(512),passphrase:z.string().max(256),legacyHistory:z.boolean().optional(),chatSecretKey:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 export const collectionSchema=z.object({wallets:z.array(storedWalletSchema).max(50),activeId:z.string().uuid().nullable()}).strict().superRefine((value,ctx)=>{
  const ids=new Set(value.wallets.map(w=>w.id));if(ids.size!==value.wallets.length|| (value.activeId!==null&&!ids.has(value.activeId)) || (value.wallets.length>0&&value.activeId===null))ctx.addIssue({code:'custom',message:'Nieprawidłowa kolekcja portfeli.'});
 });

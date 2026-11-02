@@ -1,9 +1,16 @@
+import {readActivityCache,writeActivityCache,mergeActivityCache} from './activity-cache';
+import {verifyNftOwnership} from './assets/nfts';
+import {verifyProfile} from './chat/protocol';
+import {ChatStore} from './chat/store';
+import {chatCommandSchema} from './chat/commands';
+import {newBinding,statement,verifyInvitation,exportKey,importKey} from './chat/protocol';
+import {generateSecretKey,getPublicKey} from 'nostr-tools/pure';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { generateMnemonic, validateMnemonic, seedFrom, accounts } from './keys';
+import { generateMnemonic, validateMnemonic, seedFrom, accounts, ethKey } from './keys';
 import { atomicWrite, readVault } from './vault';
 import { newCollection, openCollection, sealCollection, pinSchema, type Collection, type DeviceProtector, type Envelope } from './app-vault';
 import { balances, prepare, sign, broadcast, explorer, type Prepared } from './chains';
@@ -22,22 +29,27 @@ const transferSchema=z.object({hash:z.string(),chain:z.enum(['SOL','ETH','BTC'])
 type Session={collection:Collection;key:Buffer;envelope:Envelope};
 export class WalletService {
  readonly integrations:Integrations;
+ private chatStore?:InstanceType<typeof ChatStore>; private chatOpening?:Promise<InstanceType<typeof ChatStore>>; private chatDraining=Promise.resolve();
+ private closeChat(){if(this.chatStore)this.chatDraining=this.chatStore.close();this.chatStore=undefined;this.chatOpening=undefined;}
  private assetDrafts=new Map<string,{quote:AssetQuote;prepared:AssetPrepared;epoch:number}>();
- private imageCache=new Map<string,string>();
+ private nftCache=new Map<string,{at:number;promise:Promise<import('./assets/types').NftPage>}>();
+ private imageCache=new Map<string,{at:number;promise:Promise<string>}>();
  private vaultPath:string;private legacyPath:string;private attemptsPath:string;
  private session?:Session;private pendingMnemonic?:string;private pendingAt=0;
  private epoch=0;private busy=false;private authBusy=false;private failures=0;private retryAt=0;
+ private activitySerial:Promise<unknown>=Promise.resolve();
  private activityCache=new Map<string,{at:number;value:Promise<ActivityPage>}>();
  private drafts=new Map<string,{quote:Quote;prepared:Prepared;epoch:number}>();
- constructor(private directory:string,private protector:DeviceProtector){this.integrations=new Integrations(directory,protector);this.vaultPath=join(directory,'app.vault');this.legacyPath=join(directory,'wallet.vault');this.attemptsPath=join(directory,'pin-attempts.json');}
+ constructor(private directory:string,private protector:DeviceProtector,private chatRelayFactory?:any,private chatImageProcessor?:(input:string,avatar?:boolean)=>string){this.integrations=new Integrations(directory,protector);this.vaultPath=join(directory,'app.vault');this.legacyPath=join(directory,'wallet.vault');this.attemptsPath=join(directory,'pin-attempts.json');}
  status(network:Network):Status{network=networkSchema.parse(network);const active=this.session?.collection.wallets.find(w=>w.id===this.session!.collection.activeId);let derived:ReturnType<typeof accounts>=[];if(active){const seed=seedFrom(active.mnemonic,active.passphrase);try{derived=accounts(seed,network);}finally{seed.fill(0);}}return {exists:existsSync(this.vaultPath)||existsSync(this.legacyPath),needsMigration:!existsSync(this.vaultPath)&&existsSync(this.legacyPath),unlocked:!!this.session,accounts:derived,wallets:this.session?.collection.wallets.map(({id,name})=>({id,name}))||[],activeWalletId:this.session?.collection.activeId||null};}
  private clearDrafts(){this.drafts.clear();for(const draft of this.assetDrafts.values())disposeAsset(draft.prepared);this.assetDrafts.clear();}
  private stable(epoch:number){this.requireSession();if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');}
- async configure(raw:unknown){const input=z.object({network:networkSchema.optional(),language:z.enum(['pl','en']).optional()}).strict().parse(raw);if(input.language)this.integrations.language=input.language;if(input.network!==undefined)await this.exclusive(async()=>{this.requireSession();if(input.network!==this.integrations.network){this.integrations.network=input.network!;this.epoch++;this.clearDrafts();this.activityCache.clear();this.imageCache.clear();}});}
+ async configure(raw:unknown){const input=z.object({network:networkSchema.optional(),language:z.enum(['pl','en']).optional()}).strict().parse(raw);if(input.language)this.integrations.language=input.language;if(input.network!==undefined)await this.exclusive(async()=>{this.requireSession();if(input.network!==this.integrations.network){this.integrations.network=input.network!;this.closeChat();this.epoch++;this.clearDrafts();this.activityCache.clear();this.nftCache.clear();this.imageCache.clear();}});}
  async integrationStatus(){this.requireSession();const epoch=this.epoch;const result=await this.integrations.status();this.stable(epoch);return result;}
- async saveIntegrations(raw:unknown){return this.exclusive(async()=>{this.requireSession();const epoch=this.epoch;const result=await this.integrations.save(raw);this.stable(epoch);this.clearDrafts();return result;});}
- async nfts(raw:unknown){const input=nftQuerySchema.parse(raw),epoch=this.epoch;const account=this.status(input.network).accounts.find(a=>a.chain===input.chain);this.requireSession();if(!account)throw new Error('Dodaj portfel.');const result=await fetchNfts(input,account.address,await this.integrations.keys());this.stable(epoch);return result;}
- async nftImage(uri:string){uri=z.string().max(2048).parse(uri);this.requireSession();const epoch=this.epoch;if(this.imageCache.has(uri))return this.imageCache.get(uri)!;const result=await remoteImage(uri);this.stable(epoch);if(this.imageCache.size>=16)this.imageCache.clear();this.imageCache.set(uri,result);return result;}
+ async saveIntegrations(raw:unknown){return this.exclusive(async()=>{this.requireSession();const epoch=this.epoch;const result=await this.integrations.save(raw);this.stable(epoch);this.clearDrafts();this.nftCache.clear();return result;});}
+ async nfts(raw:unknown){const input=nftQuerySchema.parse(raw),epoch=this.epoch;const account=this.status(input.network).accounts.find(a=>a.chain===input.chain);this.requireSession();if(!account)throw new Error('Dodaj portfel.');const key=JSON.stringify([this.active().id,account.address,input]);let cached=this.nftCache.get(key);if(!cached||Date.now()-cached.at>30000){if(this.nftCache.size>=24)this.nftCache.clear();cached={at:Date.now(),promise:this.integrations.keys().then(keys=>fetchNfts(input,account.address,keys)).catch(e=>{this.nftCache.delete(key);throw e;})};this.nftCache.set(key,cached);}const result=await cached.promise;this.stable(epoch);return structuredClone(result);}
+ async nftImage(uri:string,retry=false){uri=z.string().max(1500000).parse(uri);this.requireSession();const epoch=this.epoch,key=this.active().id+':'+this.integrations.network+':'+uri;const old=this.imageCache.get(key);if(old&&!retry&&Date.now()-old.at<300000)return old.promise;const promise=remoteImage(uri).then(result=>{this.stable(epoch);return result;}).catch(e=>{this.imageCache.delete(key);throw e;});if(this.imageCache.size>=32)this.imageCache.delete(this.imageCache.keys().next().value!);this.imageCache.set(key,{at:Date.now(),promise});return promise;}
+
  async uploadMetadata(raw:MetadataUpload){this.requireSession();const epoch=this.epoch;const result=await uploadMetadata(raw,await this.integrations.keys());this.stable(epoch);return result;}
  async usdc(network:Network){network=networkSchema.parse(network);const epoch=this.epoch,seed=this.seed();try{const result=await usdcBalances(seed,network,await this.integrations.keys());this.stable(epoch);return result;}finally{seed.fill(0);}}
  async assetQuote(input:unknown){return this.exclusive(async()=>{const epoch=this.epoch,walletId=this.active().id,seed=this.seed();let prepared:AssetPrepared|undefined;try{prepared=await prepareAsset(seed,input,await this.integrations.keys());this.stable(epoch);if(prepared.intent.network!==this.integrations.network)throw new Error('Zmieniono środowisko sieciowe. Przygotuj operację ponownie.');this.clearDrafts();const quote:AssetQuote={id:randomUUID(),walletId,chain:prepared.intent.chain,network:prepared.intent.network,from:prepared.from,to:prepared.to,title:prepared.title,details:prepared.details,fee:prepared.fee,feeLabel:prepared.feeLabel,createdAddresses:prepared.createdAddresses,transactions:prepared.payload.kind==='evm'?1:prepared.payload.txs.length,expires:Date.now()+90000};this.assetDrafts.set(quote.id,{quote,prepared,epoch});return quote;}catch(e){if(prepared)disposeAsset(prepared);throw e;}finally{seed.fill(0);}});}
@@ -67,9 +79,9 @@ export class WalletService {
   if(s.collection.wallets.some(w=>w.mnemonic===data.mnemonic&&w.passphrase.normalize('NFKD')===data.passphrase.normalize('NFKD')))throw new Error('Ten portfel jest już dodany.');
   const id=randomUUID();await this.persist({...s.collection,wallets:[...s.collection.wallets,{id,...data}],activeId:id});this.pendingMnemonic=undefined;return this.status('testnet');
  });}
- private async persist(collection:Collection){const s=this.requireSession(),epoch=this.epoch;const envelope=sealCollection(collection,s.key,s.envelope);await atomicWrite(this.vaultPath,envelope);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');s.collection=collection;s.envelope=envelope;this.epoch++;this.clearDrafts();}
+ private async persist(collection:Collection){const s=this.requireSession(),epoch=this.epoch;const envelope=sealCollection(collection,s.key,s.envelope);await atomicWrite(this.vaultPath,envelope);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');s.collection=collection;s.envelope=envelope;this.closeChat();this.epoch++;this.nftCache.clear();this.imageCache.clear();this.clearDrafts();}
  async switchWallet(id:string,network:Network){z.string().uuid().parse(id);network=networkSchema.parse(network);return this.exclusive(async()=>{const s=this.requireSession();if(!s.collection.wallets.some(w=>w.id===id))throw new Error('Nie znaleziono portfela.');if(s.collection.activeId!==id)await this.persist({...s.collection,activeId:id});return this.status(network);});}
- async renameWallet(id:string,name:string,network:Network){z.string().uuid().parse(id);name=z.string().trim().min(1).max(32).parse(name);network=networkSchema.parse(network);return this.exclusive(async()=>{const s=this.requireSession();if(!s.collection.wallets.some(w=>w.id===id))throw new Error('Nie znaleziono portfela.');await this.persist({...s.collection,wallets:s.collection.wallets.map(w=>w.id===id?{...w,name}:w)});return this.status(network);});}
+ async renameWallet(id:string,name:string,network:Network){z.string().uuid().parse(id);name=z.string().trim().min(1).max(32).parse(name);network=networkSchema.parse(network);return this.exclusive(async()=>{const s=this.requireSession();if(!s.collection.wallets.some(w=>w.id===id))throw new Error('Nie znaleziono portfela.');await this.persist({...s.collection,wallets:s.collection.wallets.map(w=>w.id===id?{...w,name}:w)});if(this.active().id===id&&this.active().chatSecretKey)await this.openChat(id);return this.status(network);});}
  private async authenticate(pin:string){
   pinSchema.parse(pin);if(this.authBusy)throw new Error('Weryfikacja PIN jest w toku.');this.authBusy=true;
   try{
@@ -81,9 +93,9 @@ export class WalletService {
    try{await atomicWrite(this.attemptsPath,{failures:0,retryAt:0});}catch(e){state.key.fill(0);throw e;}this.failures=0;return state;
   }finally{this.authBusy=false;}
  }
- async unlock(pin:string,network:Network){network=networkSchema.parse(network);if(this.busy)throw new Error('Inna operacja jest w toku.');const epoch=this.epoch;const state=await this.authenticate(pin);if(epoch!==this.epoch){state.key.fill(0);throw new Error('Sesja została zablokowana.');}this.session?.key.fill(0);this.session=state;this.epoch++;this.clearDrafts();return this.status(network);}
- async changePin(oldPin:string,newPin:string){pinSchema.parse(newPin);return this.exclusive(async()=>{const s=this.requireSession(),epoch=this.epoch;const proof=await this.authenticate(oldPin);proof.key.fill(0);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');const replacement=await newCollection(s.collection,newPin,this.protector);try{if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');await atomicWrite(this.vaultPath,replacement.envelope);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');s.key.fill(0);this.session={...replacement,collection:s.collection};this.epoch++;this.clearDrafts();}catch(e){replacement.key.fill(0);throw e;}});}
- lock(){this.epoch++;this.session?.key.fill(0);this.session=undefined;this.pendingMnemonic=undefined;this.clearDrafts();this.activityCache.clear();this.imageCache.clear();}
+ async unlock(pin:string,network:Network){network=networkSchema.parse(network);if(this.busy)throw new Error('Inna operacja jest w toku.');const epoch=this.epoch;const state=await this.authenticate(pin);if(epoch!==this.epoch){state.key.fill(0);throw new Error('Sesja została zablokowana.');}this.session?.key.fill(0);this.session=state;this.closeChat();this.epoch++;this.clearDrafts();return this.status(network);}
+ async changePin(oldPin:string,newPin:string){pinSchema.parse(newPin);return this.exclusive(async()=>{const s=this.requireSession(),epoch=this.epoch;const proof=await this.authenticate(oldPin);proof.key.fill(0);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');const replacement=await newCollection(s.collection,newPin,this.protector);try{if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');await atomicWrite(this.vaultPath,replacement.envelope);if(epoch!==this.epoch)throw new Error('Sesja została zablokowana.');s.key.fill(0);this.session={...replacement,collection:s.collection};this.closeChat();this.epoch++;this.clearDrafts();}catch(e){replacement.key.fill(0);throw e;}});}
+ lock(){this.closeChat();this.epoch++;this.session?.key.fill(0);this.session=undefined;this.pendingMnemonic=undefined;this.clearDrafts();this.activityCache.clear();this.nftCache.clear();this.imageCache.clear();}
  async balances(network:Network){network=networkSchema.parse(network);const epoch=this.epoch,seed=this.seed();try{const result=await balances(seed,network);if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');return result;}finally{seed.fill(0);}}
  async quote(input:unknown){const data=quoteSchema.parse(input);const epoch=this.epoch,seed=this.seed(),walletId=this.active().id;try{const prepared=await prepare(seed,data.chain,data.network,data.to,data.amount);if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');const quote:Quote={id:randomUUID(),walletId,chain:data.chain,network:data.network,networkLabel:accounts(seed,data.network).find(a=>a.chain===data.chain)!.networkLabel,from:prepared.from,to:prepared.to,amount:prepared.amount,fee:prepared.fee,feeLabel:prepared.feeLabel,expires:Date.now()+90000};this.clearDrafts();this.drafts.set(quote.id,{quote,prepared,epoch});return quote;}finally{seed.fill(0);}}
  async send(id:string,confirm:(quote:Quote)=>Promise<boolean>){return this.exclusive(async()=>{
@@ -100,7 +112,131 @@ export class WalletService {
  async activity(input:unknown):Promise<ActivityPage>{
   const data=activityInput.parse(input),epoch=this.epoch,wallet=this.active(),publicAccounts=this.status(data.network).accounts;const key=JSON.stringify([wallet.id,data.network,data.chain||'',data.cursor||'']);let cached=this.activityCache.get(key);
   if(!cached||Date.now()-cached.at>30000){if(this.activityCache.size>=24)this.activityCache.clear();cached={at:Date.now(),value:fetchActivity(publicAccounts,data.network,data.chain,data.cursor)};this.activityCache.set(key,cached);}
-  const page=await cached.value;if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');const local=await this.history();if(epoch!==this.epoch)throw new Error('Aktywny portfel lub sesja uległy zmianie.');return {...page,items:mergeLocalActivity(page.items,local.filter(t=>!data.chain||t.chain===data.chain),publicAccounts,data.network)};
+  const page=await cached.value;this.stable(epoch);const local=await this.history();this.stable(epoch);
+  const path=join(this.directory,`activity-${wallet.id}-${data.network}.vault`),identity={walletId:wallet.id,network:data.network,addresses:publicAccounts.map(a=>a.chain+':'+a.address).sort().join('|')};
+  const task=this.activitySerial.then(async()=>{this.stable(epoch);const old=await readActivityCache(path,this.protector,wallet.id,data.network,identity.addresses);this.stable(epoch);const merged=mergeActivityCache(old,page,identity,data.chain,data.cursor);await writeActivityCache(path,merged,this.protector);this.stable(epoch);return {...merged.page,items:mergeLocalActivity(merged.page.items.filter(x=>!data.chain||x.chain===data.chain),local.filter(t=>!data.chain||t.chain===data.chain),publicAccounts,data.network)};});this.activitySerial=task.catch(()=>{});return task;
  }
+  async openChat(walletId:string):Promise<InstanceType<typeof ChatStore>> {
+    const epoch = this.epoch, active = this.active();
+    if (active.id !== walletId) throw new Error("Aktywny portfel uleg\u0142 zmianie.");
+    if (this.chatStore) return this.chatStore;
+    if (this.chatOpening) return this.chatOpening;
+    const opening = (async () => {
+      await this.chatDraining;
+      this.stable(epoch);
+      const key2 = active.chatSecretKey ? Uint8Array.from(Buffer.from(active.chatSecretKey, "hex")) : void 0;
+      if (!key2) throw new Error("Najpierw aktywuj czat.");
+      const address2 = this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address;
+      const store = new ChatStore(join(this.directory, `chat-${walletId}-${getPublicKey(key2)}.vault`), key2, walletId, address2, () => {
+        this.stable(epoch);
+        if (this.active().id !== walletId) throw new Error("Aktywny portfel uleg\u0142 zmianie.");
+      }, this.chatRelayFactory);
+      key2.fill(0);
+      try {
+        const loaded=await store.load();
+        if(loaded){const current=store.identity().profile;const data=current?verifyProfile(current,store.pubkey):{version:1};await store.updateProfile({...data,name:active.name});}
+        this.stable(epoch);
+        this.chatStore = store;
+        return store;
+      } catch (e) {
+        store.close();
+        throw e;
+      }
+    })();
+    this.chatOpening = opening;
+    try {
+      return await opening;
+    } finally {
+      if (this.chatOpening === opening) this.chatOpening = void 0;
+    }
+  }
+  async chat(raw:unknown, confirm:(text:string)=>Promise<boolean>) {
+    const input = chatCommandSchema.parse(raw);
+    const wallet2 = this.active();
+    if (wallet2.id !== input.walletId) throw new Error("Aktywny portfel uleg\u0142 zmianie.");
+    if (input.action === "view" && !wallet2.chatSecretKey) return { active: false, address: this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address, connection: "brak po\u0142\u0105czenia", relays: [], contacts: [], messages: [] };
+    if (input.action === "activate" || input.action === "import") return this.exclusive(async () => {
+      const epoch2 = this.epoch;
+      let key2:Uint8Array|undefined;
+      try {
+        if (input.action === "import") {
+          const proof = await this.authenticate(input.pin);
+          proof.key.fill(0);
+          this.stable(epoch2);
+          const imported = importKey(input.backup, input.password);
+          key2 = imported.key;
+          const address3 = this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address;
+          if (imported.invitation.binding.address !== address3) throw new Error("Kopia nale\u017Cy do innego portfela EVM.");
+          if (wallet2.chatSecretKey && wallet2.chatSecretKey !== Buffer.from(key2!).toString("hex") && !input.replace) throw new Error("Zmiana klucza wymaga zgody. Dotychczasowa skrzynka zostanie od\u0142\u0105czona. Zachowaj kopi\u0119 jej klucza.");
+        } else key2 = wallet2.chatSecretKey ? Uint8Array.from(Buffer.from(wallet2.chatSecretKey, "hex")) : generateSecretKey();
+        this.stable(epoch2);
+        const address2 = this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address, draft = newBinding(key2, address2);
+        if (!await confirm(statement(draft.binding))) throw new Error("Aktywacja czatu anulowana.");
+        this.stable(epoch2);
+        const seed = this.seed();
+        let identity;
+        try {
+          identity = verifyInvitation({ ...draft, signature: await ethKey(seed).signMessage(statement(draft.binding)) });
+          this.stable(epoch2);
+        } finally {
+          seed.fill(0);
+        }
+        const changed = wallet2.chatSecretKey !== void 0 && wallet2.chatSecretKey !== Buffer.from(key2!).toString("hex");
+        if (changed) {
+          this.closeChat();
+          await this.chatDraining;
+        }
+        await this.persist({ ...this.requireSession().collection, wallets: this.requireSession().collection.wallets.map((w) => w.id === wallet2.id ? { ...w, chatSecretKey: Buffer.from(key2!).toString("hex") } : w) });
+        const store2 = await this.openChat(wallet2.id);
+        await store2.initialize(identity);
+        const oldProfile=store2.identity().profile;await store2.updateProfile({...oldProfile?verifyProfile(oldProfile,store2.pubkey):{version:1},name:wallet2.name});
+        return store2.view();
+      } finally {
+        key2?.fill(0);
+      }
+    });
+    const epoch = this.epoch, store = await this.openChat(input.walletId);
+    this.stable(epoch);
+    switch (input.action) {
+      case "view":
+        return store.view();
+      case "share":
+        return store.share();
+      case "preview":
+        return store.preview(input.invitation);
+      case "accept":
+        return store.accept(input.invitation, input.previousKey);
+      case "block":
+        return store.block(input.address, input.blocked);
+      case "send":
+        return store.send(input.address,input.text,input.image?this.processImage(input.image):undefined);
+      case 'retry-request':return store.retryRequest(input.address);
+      case 'request':return store.requestContact(input.invitation,input.previousKey);
+      case 'answer':return store.answerRequest(input.id,input.accept);
+      case 'alias':return store.alias(input.address,input.alias);
+      case 'avatar':{
+        const old=store.identity().profile;const profile:ReturnType<typeof verifyProfile>=old?verifyProfile(old,store.pubkey):{version:1,name:wallet2.name};delete profile.avatar;delete profile.nft;
+        if(input.nft&&input.nft.network!==this.integrations.network)throw Error('Zmieniono środowisko NFT.');
+        if(input.nft){const n=input.nft;const account=this.status(n.network).accounts.find(a=>a.chain===n.chain)!;const found=await fetchNfts({chain:n.chain,network:n.network,mode:'explore',query:n.address,tokenId:n.tokenId,scope:'asset'},account.address,await this.integrations.keys());this.stable(epoch);const nft=found.items.find(x=>(n.chain==='ETH'?x.address.toLowerCase()===n.address.toLowerCase():x.address===n.address)&&x.tokenId===n.tokenId);if(!nft||!nft.image)throw Error('Nie znaleziono obrazu NFT.');await verifyNftOwnership(nft,account.address,await this.integrations.keys());const img=await this.nftImage(nft.image);this.stable(epoch);profile.avatar=this.processImage(img,true);profile.nft={chain:n.chain,network:n.network,address:nft.address,tokenId:nft.tokenId,standard:nft.standard,checkedAt:Date.now()};}
+        else if(input.image)profile.avatar=this.processImage(input.image,true);
+        this.stable(epoch);await store.updateProfile(profile);return store.view();
+      }
+      case "retry":
+        return store.retry(input.id);
+      case "export": {
+        const proof = await this.authenticate(input.pin);
+        proof.key.fill(0);
+        this.stable(epoch);
+        const key2 = Uint8Array.from(Buffer.from(this.active().chatSecretKey!, "hex"));
+        try {
+          return exportKey(key2, store.identity(), input.password);
+        } finally {
+          key2.fill(0);
+        }
+      }
+    }
+  }
+
+ private processImage(input:string,avatar=false){if(!this.chatImageProcessor)throw Error('Przetwarzanie obrazów jest niedostępne.');return this.chatImageProcessor(input,avatar);}
  async reveal(pin:string){this.requireSession();const epoch=this.epoch;const proof=await this.authenticate(pin);proof.key.fill(0);if(epoch!==this.epoch)throw new Error('Sesja została zmieniona.');const {mnemonic,passphrase}=this.active();return {mnemonic,passphrase};}
 }
