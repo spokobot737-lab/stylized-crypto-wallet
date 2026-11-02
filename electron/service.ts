@@ -157,14 +157,14 @@ export class WalletService {
     if (input.action === "view" && !wallet2.chatSecretKey) return { active: false, address: this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address, connection: "brak po\u0142\u0105czenia", relays: [], contacts: [], messages: [] };
     if (input.action === "activate" || input.action === "import") return this.exclusive(async () => {
       const epoch2 = this.epoch;
-      let key2:Uint8Array|undefined;
+      let key2:Uint8Array|undefined,recoveredIdentity:ReturnType<typeof verifyInvitation>|undefined;
       try {
         if (input.action === "import") {
           const proof = await this.authenticate(input.pin);
           proof.key.fill(0);
           this.stable(epoch2);
           const imported = importKey(input.backup, input.password);
-          key2 = imported.key;
+          key2 = imported.key;recoveredIdentity=imported.invitation;
           const address3 = this.status("mainnet").accounts.find((a) => a.chain === "ETH")!.address;
           if (imported.invitation.binding.address !== address3) throw new Error("Kopia nale\u017Cy do innego portfela EVM.");
           if (wallet2.chatSecretKey && wallet2.chatSecretKey !== Buffer.from(key2!).toString("hex") && !input.replace) throw new Error("Zmiana klucza wymaga zgody. Dotychczasowa skrzynka zostanie od\u0142\u0105czona. Zachowaj kopi\u0119 jej klucza.");
@@ -176,7 +176,7 @@ export class WalletService {
         const seed = this.seed();
         let identity;
         try {
-          identity = verifyInvitation({ ...draft, signature: await ethKey(seed).signMessage(statement(draft.binding)) });
+          identity = verifyInvitation({ ...draft,...recoveredIdentity?.profile?{profile:recoveredIdentity.profile}:{}, signature: await ethKey(seed).signMessage(statement(draft.binding)) });
           this.stable(epoch2);
         } finally {
           seed.fill(0);
@@ -188,7 +188,7 @@ export class WalletService {
         }
         await this.persist({ ...this.requireSession().collection, wallets: this.requireSession().collection.wallets.map((w) => w.id === wallet2.id ? { ...w, chatSecretKey: Buffer.from(key2!).toString("hex") } : w) });
         const store2 = await this.openChat(wallet2.id);
-        await store2.initialize(identity);
+        await store2.initialize(identity,false,recoveredIdentity?Date.parse(recoveredIdentity.binding.createdAt):undefined);
         const oldProfile=store2.identity().profile;await store2.updateProfile({...oldProfile?verifyProfile(oldProfile,store2.pubkey):{version:1},name:wallet2.name});
         return store2.view();
       } finally {

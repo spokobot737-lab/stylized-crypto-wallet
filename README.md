@@ -8,11 +8,15 @@ Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ram
 
 1. Repozytorium i Releases są publiczne. Pobieranie instalatora nie wymaga konta.
 2. Otwórz **Releases**, wybierz najnowsze wydanie i rozwiń **Assets**.
-3. Pobierz **FRAME-Wallet-0.6.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
-4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.6.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
+3. Pobierz **FRAME-Wallet-0.7.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
+4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.7.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
 5. Uruchom instalator na Windows 10/11 x64. Instalator nie ma podpisu Authenticode, ponieważ projekt nie zawiera certyfikatu wydawcy.
 
 Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy instalator jest też w artefakcie `FRAME-Wallet-Windows-x64`.
+
+## Nowości 0.7: FRAME Run
+
+Geometryczna gra Canvas 2D w nawigacji portfela: trening bez limitu i weryfikowane rozgrywki do 90 sekund. Saldo FRAME pochodzi z serwerowej księgi SQLite, niezależnej od adresów i sieci. Bez skonfigurowanego konta serwera działa trening. [Uruchomienie backendu, konta, zasady i testy](docs/FRAME-RUN.md). Gra jest częścią aplikacji i instalatora 0.7.0. Trening działa bez serwera. Naliczanie FRAME wymaga skonfigurowanego serwera i konta; publiczny serwer nie jest dołączoną usługą.
 
 ## Nowości 0.6
 

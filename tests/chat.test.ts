@@ -67,3 +67,12 @@ test('renewed wallet authorization propagates to an existing contact without cha
 test('a chat key already bound to one contact cannot silently switch that contact to a different EVM address',async()=>fixture(async(a,b,_net,keys)=>{
  await connect(a,b);const other=await identity(keys[1],'Inny portfel');const payload=wrapMessage(keys[1],a.pubkey,JSON.stringify({version:2,type:'request',invitation:other}),'test-key-address',true);await a.receive(payload.events[1]);assert.equal(a.view().contacts[0].invitation.binding.address,b.address);assert.equal(a.view().requests.length,0);
 }));
+
+test('a valid message arriving before the contact acceptance control is replayed without loss',async()=>fixture(async(a,b,_net,keys)=>{
+ await b.requestContact(await a.share());await wait(()=>a.view().requests.length===1,[a,b]);const early=wrapMessage(keys[0],b.pubkey,'Wiadomość przed potwierdzeniem','early',false);await b.receive(early.events[1]);assert.equal(b.view().messages.length,0);assert.equal(b.deferred.size,1);await a.answerRequest(a.view().requests[0].id,true);await a.flush();await wait(()=>b.view().messages.some((m:any)=>m.id===early.id),[a,b]);assert.equal(b.view().messages.filter((m:any)=>m.id===early.id).length,1);
+}));
+
+test('restored authorization start allows available old history after renewing the same chat key',async()=>fixture(async(a,b,_net,keys,dir,wallets)=>{
+ const now=Date.now(),oldOwn=newBinding(keys[0],a.address,now-2*86400000),oldPeer=newBinding(keys[1],b.address,now-2*86400000);const original=verifyInvitation({...oldOwn,signature:await wallets[0].signMessage(statement(oldOwn.binding))});const peer=verifyInvitation({...oldPeer,signature:await wallets[1].signMessage(statement(oldPeer.binding))});const restored=new ChatStore(join(dir,'restored.vault'),keys[0],a.walletId,a.address,()=>{},bus().factory);
+ try{await restored.initialize(a.identity(),false,Date.parse(original.binding.createdAt));await restored.accept(encodeInvitation(peer),undefined);const history=wrapMessage(keys[1],a.pubkey,'Starsza dostępna wiadomość','old-history',false,Math.floor((now-86400000)/1000));await restored.receive(history.events[1]);assert.equal(restored.view().messages.length,1);assert.equal(restored.view().messages[0].at,history.at);}finally{await restored.close();}
+}));

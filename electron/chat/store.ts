@@ -37,7 +37,11 @@ class ChatStore {
   timer;
   flushing = false;
   started = Date.now();
+  deferred=new Map();
   seen = /* @__PURE__ */ new Set();
+  remember(id){this.seen.add(id);if(this.seen.size>5000)this.seen.delete(this.seen.values().next().value);}
+  replayDeferred(peerKey){for(const [id,value]of this.deferred)if(value.peerKey===peerKey){this.deferred.delete(id);queueMicrotask(()=>void this.receive(value.event).catch(()=>{}));}}
+  refreshHistory(){this.seen.clear();for(const p of this.peers.values())p.relay.close();this.peers.clear();void this.tick();}
   guard() {
     if (this.closed) throw new Error("Czat zablokowany.");
     this.valid();
@@ -76,12 +80,12 @@ class ChatStore {
       throw new Error("Nie mo\u017Cna odszyfrowa\u0107 historii czatu. Przywr\xF3\u0107 w\u0142a\u015Bciwy klucz z kopii.");
     }
   }
-  async initialize(identity, replace = false) {
+  async initialize(identity, replace = false,since=Date.parse(identity.binding.createdAt)) {
     return this.mutate(async () => {
       this.guard();
       if (identity.binding.publicKey !== this.pubkey || identity.binding.address !== this.address) throw new Error("Klucz nie pasuje do portfela.");
-      if (this.state && !replace) {this.state.identitySince??=Date.parse(this.state.identity.binding.createdAt);this.state.identity = {...identity,...this.state.identity.profile?{profile:this.state.identity.profile}:{}};if(this.state.shared&&this.state.identity.profile)for(const c of this.state.contacts)if(!c.blocked&&!c.pending&&(c.invitation.profile||this.capabilities.has(c.invitation.binding.publicKey)))this.queueControl(c.invitation,{version:2,type:'request',invitation:this.state.identity});}
-      else this.state = { version: 2, walletId: this.walletId, identity, contacts: [], messages: [], outbox: [], requests:[],rejected:[],controlSeen:[],shared:false };
+      if (this.state && !replace) {this.state.identitySince=Math.min(this.state.identitySince??Date.parse(this.state.identity.binding.createdAt),since);this.state.identity = {...identity,...this.state.identity.profile?{profile:this.state.identity.profile}:{}};if(this.state.shared&&this.state.identity.profile)for(const c of this.state.contacts)if(!c.blocked&&!c.pending&&(c.invitation.profile||this.capabilities.has(c.invitation.binding.publicKey)))this.queueControl(c.invitation,{version:2,type:'request',invitation:this.state.identity});}
+      else this.state = { version: 2, identitySince:since, walletId: this.walletId, identity, contacts: [], messages: [], outbox: [], requests:[],rejected:[],controlSeen:[],shared:false };
       await this.save();
       this.start();
     });
@@ -90,7 +94,7 @@ class ChatStore {
     try {
       this.guard();
       const state = stateSchema.parse(this.state);
-      await atomicWrite(this.path, { version: 1, data: encrypt(JSON.stringify(state), this.storageKey) });
+      const data=encrypt(JSON.stringify(state),this.storageKey);if(data.length>31000000)throw Error('Osiągnięto limit rozmiaru historii czatu. Zapis zatrzymano; dotychczasowy plik zachowano.');await atomicWrite(this.path,{version:1,data});
       this.guard();
     } catch (e) {
       this.close();
@@ -176,7 +180,7 @@ class ChatStore {
     const req=this.state.requests.find(r=>r.id===id);if(!req)throw Error('Prośba jest niedostępna.');const invite=verifyInvitation(req.invitation);const b=invite.binding;
     if(accept){this.state.shared=true;const old=this.state.contacts.find(c=>c.invitation.binding.address===b.address);if(old&&old.invitation.binding.publicKey!==b.publicKey)throw Error('Inny klucz znanego kontaktu: dodaj zaproszenie i jawnie zaakceptuj zmianę klucza.');if(old){old.invitation=invite;old.pending=false;}else{if(this.state.contacts.length>=100)throw Error('Limit kontaktów.');this.state.contacts.push({invitation:invite,blocked:false});}this.queueControl(invite,{version:2,type:'accept',invitation:this.identity()});}
     else this.state.rejected=[...new Set([...this.state.rejected,b.publicKey])].slice(-100);
-    if(accept)this.state.rejected=this.state.rejected.filter(k=>k!==b.publicKey);this.state.requests=this.state.requests.filter(r=>r.id!==id);await this.save();
+    if(accept)this.state.rejected=this.state.rejected.filter(k=>k!==b.publicKey);this.state.requests=this.state.requests.filter(r=>r.id!==id);await this.save();if(accept){this.replayDeferred(b.publicKey);this.refreshHistory();}
   });}
   async alias(address,alias){return this.mutate(async()=>{const c=this.state.contacts.find(c=>c.invitation.binding.address===address);if(!c)throw Error('Nie znaleziono kontaktu.');c.alias=z.string().trim().max(32).parse(alias);await this.save();});}
 
@@ -294,7 +298,7 @@ class ChatStore {
   }
   async receive(event) {
     this.guard();if(this.seen.has(event.id)||event.content.length>52000)return;
-    const rumor=readMessage(event,this.key);this.seen.add(event.id);if(this.seen.size>5000)this.seen.delete(this.seen.values().next().value);
+    const rumor=readMessage(event,this.key);
     await this.mutate(async()=>{
       const s=this.state;if(!s)return;
       const outgoing=rumor.pubkey===this.pubkey,peerKey=outgoing?rumor.tags.find(t=>t[0]==='p')[1]:rumor.pubkey;
@@ -303,7 +307,7 @@ class ChatStore {
       if(contact?.blocked||s.rejected.includes(peerKey))return;
       const payload=readPayload(rumor);
       if(payload&&payload.type!=='image'){
-        if(s.controlSeen.includes(rumor.id)||outgoing)return;
+        if(s.controlSeen.includes(rumor.id)||outgoing){this.remember(event.id);return;}
         if(payload.type==='request'||payload.type==='accept'){
           const invite=verifyInvitation(payload.invitation);const b=invite.binding;
           if(contact&&contact.invitation.binding.address!==b.address)return;
@@ -314,23 +318,23 @@ class ChatStore {
             if(s.requests.some(r=>r.invitation.binding.publicKey===peerKey)||s.requests.length>=30||s.requests.filter(r=>(r.receivedAt??r.at)>Date.now()-60000).length>=5)return;
             if(contact&&!contact.pending&&s.shared){if(Date.parse(b.createdAt)>=Date.parse(contact.invitation.binding.createdAt)){contact.since??=Date.parse(contact.invitation.binding.createdAt);contact.invitation=invite;}this.queueControl(invite,{version:2,type:'accept',invitation:this.identity()});}
             else s.requests.push({id:rumor.id,at,receivedAt:Date.now(),invitation:invite});
-          }else if(contact?.pending){contact.pending=false;contact.invitation=invite;if(s.shared&&s.identity.profile)this.queueControl(invite,{version:2,type:'profile',profile:s.identity.profile});}
+          }else if(contact?.pending){contact.pending=false;contact.invitation=invite;this.replayDeferred(peerKey);if(s.shared&&s.identity.profile)this.queueControl(invite,{version:2,type:'profile',profile:s.identity.profile});}
         }else if(payload.type==='profile'){
           if(!contact||contact.pending)return;
           verifyInvitation(contact.invitation);verifyProfile(payload.profile,peerKey);
           const old=contact.invitation.profile;
           if(!old||payload.profile.created_at>old.created_at||(payload.profile.created_at===old.created_at&&payload.profile.id>old.id))contact.invitation.profile=payload.profile;
         }
-        s.controlSeen.push(rumor.id);s.controlSeen=s.controlSeen.slice(-1000);await this.save();return;
+        s.controlSeen.push(rumor.id);s.controlSeen=s.controlSeen.slice(-1000);await this.save();this.remember(event.id);return;
       }
-      if(!contact||contact.pending)return;
+      if(!contact||contact.pending){if((contact?.pending||s.requests.some(r=>r.invitation.binding.publicKey===peerKey))&&this.deferred.size<100)this.deferred.set(event.id,{event,peerKey});return;}
       const binding=verifyInvitation(contact.invitation,true).binding;
       if(at<(contact.since??Date.parse(binding.createdAt))-300000||at>Date.parse(binding.expiresAt)||at<(s.identitySince??Date.parse(s.identity.binding.createdAt))-300000||at>Date.parse(s.identity.binding.expiresAt))return;
       const existing=s.messages.find(m=>m.id===rumor.id);
-      if(existing){if(existing.peerKey!==peerKey||existing.outgoing!==outgoing)return;existing.at=at;s.messages.sort(compareMessages);await this.save();return;}
+      if(existing){if(existing.peerKey!==peerKey||existing.outgoing!==outgoing)return;existing.at=at;s.messages.sort(compareMessages);await this.save();this.remember(event.id);return;}
       if(s.messages.length>=2000)return;
       s.messages.push({id:rumor.id,peer:binding.address,peerKey,text:payload?payload.text:rumor.content,...(payload?{image:payload.image}:{}),at,outgoing,status:'przyjęto przez relay',...(outgoing?{recovered:true}:{})});
-      s.messages.sort(compareMessages);await this.save();
+      s.messages.sort(compareMessages);await this.save();this.remember(event.id);
     });
   }
   close() {
@@ -341,7 +345,7 @@ class ChatStore {
     this.key.fill(0);
     this.storageKey.fill(0);
     this.state = void 0;
-    this.seen.clear();
+    this.seen.clear();this.deferred.clear();
     return this.serial;
   }
 }
