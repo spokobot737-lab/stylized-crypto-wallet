@@ -10,6 +10,8 @@ import { metadataUrl, remoteMetadata,resolveMediaUri } from './remote';
 import type { IntegrationKeys,Nft,NftPage,NftQuery,NftStandard } from './types';
 
 export const nftQuerySchema=z.object({chain:z.enum(['ETH','SOL']),network:z.enum(['mainnet','testnet']),mode:z.enum(['owned','explore']),scope:z.enum(['asset','collection']).optional(),query:z.string().trim().max(128).optional(),tokenId:z.string().regex(/^\d{1,78}$/).optional(),cursor:z.string().max(2048).optional()}).strict();
+export function erc1155Uri(value:string,id:string){const hex=BigInt(id).toString(16).padStart(64,'0');if(hex.length!==64)throw Error('Identyfikator ERC-1155 przekracza uint256.');return value.replace(/\{id\}|%7bid%7d/gi,hex);}
+const metadataImage=(md:any)=>typeof md.image==='string'?md.image:typeof md.image_url==='string'?md.image_url:typeof md.image_data==='string'&&md.image_data.trim().startsWith('<svg')?'data:image/svg+xml;base64,'+Buffer.from(md.image_data).toString('base64'):undefined;
 const text=(v:unknown,length=160)=>typeof v==='string'?v.slice(0,length):'';
 const uri=(v:unknown)=>{try{return resolveMediaUri(text(v,1200000));}catch{return undefined;}};
 export function alchemyNft(raw:any,network:NftQuery['network']):Nft{
@@ -26,7 +28,7 @@ async function fetchNftsRaw(query:NftQuery,owner:string,keys:IntegrationKeys):Pr
  if(query.chain==='ETH'){
   if(query.mode==='explore'&&(!query.query||!isAddress(query.query)))throw new Error('Wpisz adres kontraktu kolekcji Ethereum.');
   if(query.mode==='explore'&&query.tokenId&&!keys.alchemy){
-   const provider=ethereum(query.network);try{await checkEthereum(provider,query.network);const contract=new Contract(query.query!,[...ERC721,...ERC1155],provider);let standard:NftStandard='ERC721',tokenUri:string;try{tokenUri=await contract.tokenURI(query.tokenId);}catch{standard='ERC1155';tokenUri=await contract.uri(query.tokenId);tokenUri=tokenUri.replace(/\{id\}/g,BigInt(query.tokenId).toString(16).padStart(64,'0'));}let metadata:any={};try{metadata=await remoteMetadata(tokenUri);}catch{}return {items:[alchemyNft({contract:{address:query.query},tokenId:query.tokenId,tokenType:standard,name:metadata.name,description:metadata.description,image:{originalUrl:metadata.image||metadata.image_url},tokenUri},query.network)]};}finally{provider.destroy();}
+   const provider=ethereum(query.network);try{await checkEthereum(provider,query.network);const contract=new Contract(query.query!,[...ERC721,...ERC1155],provider);let standard:NftStandard='ERC721',tokenUri:string;try{tokenUri=await contract.tokenURI(query.tokenId);}catch{standard='ERC1155';tokenUri=await contract.uri(query.tokenId);tokenUri=erc1155Uri(tokenUri,query.tokenId);}let metadata:any={};try{metadata=await remoteMetadata(tokenUri);}catch{}return {items:[alchemyNft({contract:{address:query.query},tokenId:query.tokenId,tokenType:standard,name:metadata.name,description:metadata.description,image:{originalUrl:metadataImage(metadata)},tokenUri},query.network)]};}finally{provider.destroy();}
   }
   if(!keys.alchemy)throw new Error('Dodaj klucz Alchemy w Ustawieniach → Integracje, aby pobrać listę NFT Ethereum.');
   const root=`https://${query.network==='mainnet'?'eth-mainnet':'eth-sepolia'}.g.alchemy.com/nft/v3/${encodeURIComponent(keys.alchemy)}/`;
@@ -42,7 +44,7 @@ async function fetchNftsRaw(query:NftQuery,owner:string,keys:IntegrationKeys):Pr
   if(query.scope==='collection')throw new Error('Dodaj klucz Helius w Ustawieniach → Integracje, aby przeglądać kolekcje Solana.');if(!query.query)throw new Error('Wpisz adres NFT Solana.');const address=new PublicKey(query.query).toBase58(),umi=createUmi(solRpc(query.network)).use(mplCore()).use(mplTokenMetadata());
   let name:string,tokenUri:string,standard:NftStandard;
   try{const asset=await fetchAsset(umi,publicKey(address));name=asset.name;tokenUri=asset.uri;standard='CORE';}catch{const asset=await fetchDigitalAsset(umi,publicKey(address));name=asset.metadata.name;tokenUri=asset.metadata.uri;standard='METAPLEX';}
-  let metadata:any={};try{metadata=await remoteMetadata(tokenUri);}catch{}return {items:[{id:`SOL:${query.network}:${address}`,chain:'SOL',network:query.network,address,name,uri:uri(tokenUri),image:uri(metadata.image||metadata.image_url),description:text(metadata.description,1000),standard,quantity:'1',transferable:true}]};
+  let metadata:any={};try{metadata=await remoteMetadata(tokenUri);}catch{}return {items:[{id:`SOL:${query.network}:${address}`,chain:'SOL',network:query.network,address,name,uri:uri(tokenUri),image:uri(metadataImage(metadata)),description:text(metadata.description,1000),standard,quantity:'1',transferable:true}]};
  }
  let method='getAssetsByOwner',params:any={ownerAddress:owner,page:query.cursor?Number(query.cursor):1,limit:12};
  if(query.cursor&&!/^[1-9]\d{0,5}$/.test(query.cursor))throw new Error('Nieprawidłowa strona historii NFT.');
@@ -58,9 +60,9 @@ async function fetchNftsRaw(query:NftQuery,owner:string,keys:IntegrationKeys):Pr
 }
 
 export async function fetchNfts(query:NftQuery,owner:string,keys:IntegrationKeys):Promise<NftPage>{
- const page=await fetchNftsRaw(query,owner,keys);
+ const page=await fetchNftsRaw(query,owner,keys);for(const nft of page.items)if(nft.standard==='ERC1155'&&nft.uri&&nft.tokenId)nft.uri=erc1155Uri(nft.uri,nft.tokenId);
  await Promise.all(page.items.map(async nft=>{
-   if(!nft.image&&nft.uri){try{const md=await remoteMetadata(nft.uri);const image=md.image||md.image_url;if(typeof image==='string')nft.image=resolveMediaUri(image,nft.uri);}catch{nft.warning=[nft.warning,'Metadane lub obraz NFT są niedostępne.'].filter(Boolean).join(' ');}}
+   if(!nft.image&&nft.uri){try{const md=await remoteMetadata(nft.uri);const image=metadataImage(md);if(typeof image==='string')nft.image=resolveMediaUri(image,nft.uri);}catch{nft.warning=[nft.warning,'Metadane lub obraz NFT są niedostępne.'].filter(Boolean).join(' ');}}
    // Eksploracja jest podglądem. Wysyłka wymaga osobnego potwierdzenia własności.
    nft.owned=query.mode==='owned';if(nft.owned)nft.id=owner+':'+nft.id;nft.transferable=nft.transferable&&query.mode==='owned';
  }));return page;

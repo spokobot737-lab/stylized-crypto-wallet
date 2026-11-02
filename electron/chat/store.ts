@@ -306,6 +306,7 @@ class ChatStore {
         if(s.controlSeen.includes(rumor.id)||outgoing)return;
         if(payload.type==='request'||payload.type==='accept'){
           const invite=verifyInvitation(payload.invitation);const b=invite.binding;
+          if(contact&&contact.invitation.binding.address!==b.address)return;
           if(b.publicKey!==rumor.pubkey||b.address===this.address||!invite.profile||at<Date.parse(b.createdAt)-300000||at>Date.parse(b.expiresAt))return;
           const known=s.contacts.find(c=>c.invitation.binding.address===b.address);
           if(known&&known.invitation.binding.publicKey!==b.publicKey)return;

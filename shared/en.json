@@ -581,5 +581,8 @@
   "łączenie": "connecting",
   "przyjęto przez relay": "accepted by relay",
   "oczekuje": "queued",
-  "błąd": "error"
+  "błąd": "error",
+  "Własność sprawdzono": "Ownership checked",
+  "Zezwalam na zastąpienie innego klucza czatu. Zachowam kopię obecnego klucza; stara historia pozostanie w osobnym pliku.": "Allow replacing a different chat key. I will back up my current key; its history will remain in a separate file.",
+  "Nieprawidłowy obraz NFT.": "Invalid NFT image."
 }

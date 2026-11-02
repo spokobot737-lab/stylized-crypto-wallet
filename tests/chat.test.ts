@@ -63,3 +63,7 @@ test('renewed wallet authorization propagates to an existing contact without cha
  await connect(a,b);await b.send(a.address,'Zachowana historia');await b.flush();await wait(()=>a.view().messages.length===1,[a,b]);const before=b.view().contacts[0].invitation.binding.inboxId;
  const draft=newBinding(keys[0],a.address);await a.initialize(verifyInvitation({...draft,signature:await wallets[0].signMessage(statement(draft.binding))}));await a.flush();await wait(()=>b.view().contacts[0].invitation.signature===a.identity().signature,[a,b]);assert.equal(a.view().messages.length,1);assert.equal(a.pubkey,getPublicKey(keys[0]));
 }));
+
+test('a chat key already bound to one contact cannot silently switch that contact to a different EVM address',async()=>fixture(async(a,b,_net,keys)=>{
+ await connect(a,b);const other=await identity(keys[1],'Inny portfel');const payload=wrapMessage(keys[1],a.pubkey,JSON.stringify({version:2,type:'request',invitation:other}),'test-key-address',true);await a.receive(payload.events[1]);assert.equal(a.view().contacts[0].invitation.binding.address,b.address);assert.equal(a.view().requests.length,0);
+}));

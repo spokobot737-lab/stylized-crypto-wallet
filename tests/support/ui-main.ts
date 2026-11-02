@@ -2,7 +2,7 @@
 import {app,BrowserWindow,ipcMain,clipboard} from 'electron';
 import {mkdtemp} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join,resolve,sep} from 'node:path';
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
@@ -24,18 +24,18 @@ for(let i=0;i<14;i++){await bc({action:'send',address:as.accounts.find(x=>x.chai
 await ac({action:'send',address:bs.accounts.find(x=>x.chain==='ETH')!.address,text:'Dziękuję. Spotkajmy się jutro o 10:00.',image:png});await(await a.openChat(aid)).flush();
 await a.saveIntegrations({alchemy:'fixture',helius:'fixture'});
 a.balances=async n=>a.status(n).accounts.map(x=>({...x,balance:'0'}));a.usdc=async n=>(['ETH','SOL']as const).map(chain=>({chain,network:n,address:as.accounts.find(x=>x.chain===chain)!.address,contract:chain==='ETH'?'0x0000000000000000000000000000000000000001':'So11111111111111111111111111111111111111112',balance:'0'}));
-const originalFetch=globalThis.fetch;globalThis.fetch=async(input,init)=>{
+let failSol=false;const originalFetch=globalThis.fetch;globalThis.fetch=async(input,init)=>{
  const url=String(input);if(url.includes('alchemy'))return Response.json({ownedNfts:[{contract:{address:'0x0000000000000000000000000000000000000001'},tokenId:'1',tokenType:'ERC721',name:'Geometryczny krajobraz',tokenUri:'data:application/json,'+encodeURIComponent(JSON.stringify({image:'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#182d47"/><path d="M0 400L160 100L400 400" fill="#779dec"/></svg>')}))}]});
- if(url.includes('helius'))return Response.json({result:{items:[{id:as.accounts[0].address,interface:'MplCoreAsset',content:{metadata:{name:'Niebieska kolekcja'},links:{image:png}}}]}});
+ if(url.includes('helius')){if(failSol)throw Error('Test częściowej awarii Solana');return Response.json({result:{items:[{id:as.accounts[0].address,interface:'MplCoreAsset',content:{metadata:{name:'Niebieska kolekcja'},links:{image:png}}}]}});}
  if(url.includes('routescan'))return Response.json({status:'1',message:'OK',result:url.includes('action=txlist&')?[{hash:'0x'+'a'.repeat(64),from:'0x0000000000000000000000000000000000000002',to:as.accounts[1].address,value:'1000000000000000',timeStamp:'1700000000',blockNumber:'100',gasUsed:'21000',gasPrice:'1000000000'}]:[]});
  if(url.includes('/txs'))return Response.json([]);if(url.includes('/tip/height'))return new Response('100');if(url.includes('solana.com')){const body=JSON.parse(String(init?.body));return Response.json({jsonrpc:'2.0',id:body.id,result:body.method==='getTokenAccountsByOwner'?{value:[]}:[]});}return originalFetch(input,init);
 };
-const root=resolve('dist'),server=createServer(async(req,res)=>{const file=resolve(root,'.'+new URL(req.url!,'http://localhost').pathname);if(!file.startsWith(root+'/')){res.writeHead(403);res.end();return;}try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'text/html');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+(server.address()as any).port;
+const root=resolve('dist'),server=createServer(async(req,res)=>{const file=resolve(root,'.'+new URL(req.url!,'http://localhost').pathname);if(!file.startsWith(root+sep)){res.writeHead(403);res.end();return;}try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'text/html');res.end(await readFile(file));}catch{res.writeHead(404);res.end();}});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+(server.address()as any).port;
 const window=new BrowserWindow({width:1440,height:1080,show:true,webPreferences:{offscreen:true,preload:resolve('dist-electron/preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
 window.webContents.session.webRequest.onHeadersReceived((details,callback)=>callback({responseHeaders:{...details.responseHeaders,'Content-Security-Policy':["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'"]}}));
 const names=['status','initialize','import','switchWallet','renameWallet','configure','balances','activity','usdc','integrations','saveIntegrations','nfts','nftImage','assetOperations','lock'];for(const name of names)ipcMain.handle('wallet:'+name,async(_event,...args)=>{try{return{ok:true,value:await(name==='integrations'?a.integrationStatus(): (a as any)[name](...args))};}catch(e){return{ok:false,error:(e as Error).message};}});
 ipcMain.handle('wallet:chat',async(_event,input)=>{try{return{ok:true,value:await ac(input)};}catch(e){return{ok:false,error:(e as Error).message};}});
 ipcMain.handle('wallet:chatImage',(_e,input,avatar)=>{try{return{ok:true,value:normalizeChatImage(input,avatar)};}catch(e){return{ok:false,error:(e as Error).message};}});
 ipcMain.handle('wallet:copyText',(_e,text)=>{clipboard.writeText(text);return{ok:true};});
-(globalThis as any).__frameFixture={png,aid,sendRemote:async(text='Nowa wiadomość testowa')=>{await bc({action:'send',address:as.accounts[1].address,text});await(await b.openChat(bid)).flush();},failNext:()=>{const s:any=a;s.processImage=()=>{throw Error('Test błędu obrazu');};},stop:()=>{a.lock();b.lock();server.close();}};
+(globalThis as any).__frameFixture={png,aid,sendRemote:async(text='Nowa wiadomość testowa')=>{await bc({action:'send',address:as.accounts[1].address,text});await(await b.openChat(bid)).flush();},failSol:()=>{failSol=true;(a as any).nftCache.clear();},failNext:()=>{const s:any=a;s.processImage=()=>{throw Error('Test błędu obrazu');};},stop:()=>{a.lock();b.lock();server.close();}};
 await window.loadURL(origin+'/index.html');app.on('window-all-closed',()=>{a.lock();b.lock();server.close();app.quit();});

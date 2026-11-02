@@ -14,8 +14,8 @@ export async function readActivityCache(path:string,protector:DeviceProtector,wa
 export function mergeActivityCache(old:CachedActivity|undefined,incoming:ActivityPage,identity:{walletId:string;network:Network;addresses:string},selected?:Chain,cursor?:string):CachedActivity{
  const rows=new Map(old?.page.items.map(x=>[x.id,x])||[]);for(const row of incoming.items)rows.set(row.id,row);
  const items=[...rows.values()].sort((a,b)=>Number(b.status==='pending')-Number(a.status==='pending')||(b.at||0)-(a.at||0)||a.id.localeCompare(b.id));
- const advanced=new Set(old?.advanced||[]);if(selected&&cursor)advanced.add(selected);const next={...old?.page.next};
- for(const c of ['SOL','ETH','BTC'] as const)if(c in incoming.next){const failed=incoming.unavailable?.includes(c);if(!failed&&(cursor||!advanced.has(c)||!(c in next)))next[c]=incoming.next[c];}
+ const advanced=new Set(old?.advanced||[]);const oldRows=old?.page.items||[];const group=(x:ActivityPage['items'][number])=>x.chain+':'+(x.asset?x.asset.standard+':'+x.asset.address.toLowerCase():x.id.includes(':internal:')?'internal':'native');const groups=new Map<string,boolean>();for(const x of incoming.items){const k=group(x);groups.set(k,!!groups.get(k)||oldRows.some(o=>o.id===x.id));}const gaps=new Set(incoming.items.filter(x=>groups.get(group(x))===false).map(x=>x.chain));if(selected&&cursor)advanced.add(selected);const next={...old?.page.next};
+ for(const c of ['SOL','ETH','BTC'] as const)if(c in incoming.next){const failed=incoming.unavailable?.includes(c);if(!failed&&(cursor||!advanced.has(c)||!(c in next)||gaps.has(c)))next[c]=incoming.next[c];}
  const warnings=[...(old?.page.warnings||[]).filter(w=>!(w.chain in incoming.next)),...incoming.warnings];if(items.length>5000)warnings.push({chain:selected||'ETH',message:'Cache obejmuje 5000 najnowszych rekordów. Starsze dane sprawdź w eksploratorze.'});
  return {version:1,...identity,advanced:[...advanced],page:{unavailable:incoming.unavailable,items:items.slice(0,5000),next,warnings:warnings.slice(-100),fetchedAt:incoming.fetchedAt}};
 }
