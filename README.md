@@ -1,18 +1,26 @@
 # FRAME Wallet
 
-Prywatny portfel desktopowy SOL / ETH / BTC / USDC oraz NFT Ethereum i Solana. Electron + React + TypeScript + Tailwind CSS 4.
+Osobisty portfel desktopowy SOL / ETH / BTC / USDC oraz NFT Ethereum i Solana. Electron + React + TypeScript + Tailwind CSS 4.
 
 Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ramki, twarde cienie) i **Alien Signal** (ciemne panele, neonowe linie, siatka i monospace). Do tego **Chroma Riot** (róż, pomarańcz, fiolet) i **Obsidian** (czerń i srebro). Personalizacja obejmuje motyw, akcent Alien, gęstość, teksturę heksagonalną oraz szybkość i intensywność animacji.
 
 ## Pobranie instalatora
 
-1. Zaloguj się do konta mającego dostęp do tego prywatnego repozytorium.
+1. Repozytorium i Releases są publiczne. Pobieranie instalatora nie wymaga konta.
 2. Otwórz **Releases**, wybierz najnowsze wydanie i rozwiń **Assets**.
-3. Pobierz **FRAME-Wallet-0.4.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
-4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.4.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
+3. Pobierz **FRAME-Wallet-0.6.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
+4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.6.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
 5. Uruchom instalator na Windows 10/11 x64. Instalator nie ma podpisu Authenticode, ponieważ projekt nie zawiera certyfikatu wydawcy.
 
 Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy instalator jest też w artefakcie `FRAME-Wallet-Windows-x64`.
+
+## Nowości 0.6
+
+Naprawiona oś czasu NIP-17, jednokierunkowe prośby o kontakt, prywatne podpisane nicki i awatary, małe obrazy E2EE, regulowane panele czatu, widok NFT wszystkich obsługiwanych sieci i wspólny resolver mediów, trwała paginowana aktywność, kategoria Stablecoiny oraz warianty ruchu Sześciokąty/Płynny/Wyłączone. Aktualizacja zachowuje klucze i tworzy zaszyfrowaną kopię historii przed migracją.
+
+[Pełny opis, przyczyny problemów, test na dwóch kontach i konkretne ograniczenia](docs/0.6.0-TESTING.md). [Pochodzenie odtworzonych modułów 0.5.0 i zachowanie zgodności danych](docs/SOURCE-RECOVERY.md).
+
+W źródłowym ZIP-ie nie ma gotowego EXE. Instalator jest oddzielnym zasobem Releases. Wydanie 0.5.0 pozostaje zachowane; jego automatyczne archiwa źródeł nie są pełnymi źródłami czatu. Od 0.6.0 ten projekt zawiera edytowalne moduły i testy zmian.
 
 ## Nowości 0.4
 
@@ -43,7 +51,7 @@ Aktualizacja zachowuje sejf, wspólny PIN i dotychczasowy układ. Obejmuje też 
 - Płynne przejścia paneli, dialogów i układu kart; ustawienia szybkości/intensywności, pełne wyłączenie i respektowanie `prefers-reduced-motion`.
 - Test Windows sprawdza rzeczywisty schowek OS i UI na deterministycznych, wyłącznie testowych odpowiedziach historii. Nie wysyła środków. Zrzuty w Releases zawierają dane testowe.
 
-Zainstaluj 0.4 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zostają zachowane, nie ma nowej migracji sejfu.
+Zainstaluj 0.6 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zostają zachowane, nie ma nowej migracji sejfu.
 
 ## Funkcje odziedziczone z 0.2
 
@@ -64,13 +72,13 @@ Zainstaluj 0.4 nad 0.2 na tym samym profilu Windows. Portfele, PIN i układ zost
 
 ## Aktualizacja z 0.1
 
-Zainstaluj 0.4 nad dotychczasową aplikacją. Przy pierwszym uruchomieniu podaj **dotychczasowe hasło jeden raz** i wybierz PIN aplikacji. Adresy, seed, passphrase i historia pierwszego portfela są zachowane. Stary zaszyfrowany plik `wallet.vault` pozostaje nienaruszony jako kopia; nowy sejf to `app.vault`. Nowe portfele mają osobne pliki lokalnej historii. Nie przenoś samego `app.vault` na inny profil Windows: jest powiązany z systemowym magazynem kluczy. Do przywrócenia na innym urządzeniu użyj seeda i passphrase każdego portfela. Wersja 0.1 nie rozumie nowych portfeli utworzonych w 0.2.
+Zainstaluj 0.6 nad dotychczasową aplikacją. Przy pierwszym uruchomieniu podaj **dotychczasowe hasło jeden raz** i wybierz PIN aplikacji. Adresy, seed, passphrase i historia pierwszego portfela są zachowane. Stary zaszyfrowany plik `wallet.vault` pozostaje nienaruszony jako kopia; nowy sejf to `app.vault`. Nowe portfele mają osobne pliki lokalnej historii. Nie przenoś samego `app.vault` na inny profil Windows: jest powiązany z systemowym magazynem kluczy. Do przywrócenia na innym urządzeniu użyj seeda i passphrase każdego portfela. Wersja 0.1 nie rozumie nowych portfeli utworzonych w 0.2.
 
 ## Zakres i ograniczenia
 
 **Eksperymentalny hot wallet, bez niezależnego audytu.** Najpierw sprawdź sieci testowe i odzyskanie adresów z kopii. Nie jest to portfel sprzętowy. Złośliwe oprogramowanie urządzenia może odczytać dane podczas odblokowania; JavaScript nie gwarantuje wymazania wszystkich kopii stringów/kluczy w pamięci.
 
-Obsługiwane są natywne SOL, ETH i BTC, jedno konto/adres na sieć w każdym portfelu. Pozostałe SPL/ERC-20, Polygon/Base, handel na marketplace, dApps, WalletConnect, ENS, multisig, RBF i automatyczne wyszukiwanie wszystkich kont nie są obsługiwane. Skompresowane NFT Solana są tylko do odczytu. Ograniczenia lub dodatkowa autoryzacja konkretnego NFT mogą uniemożliwić transfer; aplikacja blokuje go po nieudanej symulacji. Import frazy z innej aplikacji może wymagać dopasowania ścieżki; wersja 0.4 stosuje wyłącznie wymienione powyżej ścieżki. BTC używa jednego adresu odbioru/reszty, co ogranicza prywatność. Ethereum wysyła tylko na zwykłe konta bez kodu, SOL na adresy on-curve.
+Obsługiwane są natywne SOL, ETH i BTC, jedno konto/adres na sieć w każdym portfelu. Pozostałe SPL/ERC-20, Polygon/Base, handel na marketplace, dApps, WalletConnect, ENS, multisig, RBF i automatyczne wyszukiwanie wszystkich kont nie są obsługiwane. Skompresowane NFT Solana są tylko do odczytu. Ograniczenia lub dodatkowa autoryzacja konkretnego NFT mogą uniemożliwić transfer; aplikacja blokuje go po nieudanej symulacji. Import frazy z innej aplikacji może wymagać dopasowania ścieżki; wersja 0.6 stosuje wyłącznie wymienione powyżej ścieżki. BTC używa jednego adresu odbioru/reszty, co ogranicza prywatność. Ethereum wysyła tylko na zwykłe konta bez kodu, SOL na adresy on-curve.
 
 Domyślnie aplikacja uruchamia **Mainnet**. Tryb **Testnet** oznacza Devnet dla SOL, Sepolia dla ETH i Testnet3 dla BTC. Publiczne węzły/API mogą mieć limity, przerwy i ograniczenia geograficzne. Dostawcy widzą adresy i IP, nigdy seed ani klucz prywatny. Historia w aplikacji korzysta z publicznych indeksów i RPC. Jej kompletność zależy od dostawców; szczegóły zweryfikujesz w eksploratorze. Historia natywnych monet nie indeksuje wszystkich operacji tokenów/NFT. Lokalne wysyłki NFT/USDC mają osobny dziennik; ich końcowy wynik należy sprawdzić w eksploratorze. Indeksy NFT mogą aktualizować własność z opóźnieniem.
 
@@ -96,11 +104,11 @@ Pliki sejfu i historii są w katalogu `app.getPath('userData')` aplikacji FRAME 
 
 ## CI/CD
 
-`.github/workflows/build.yml`: push/PR → testy → typecheck i build → test rzeczywistego Electron → instalator NSIS x64 → artefakty i SHA256. Push taga `v*` albo ręczne **Run workflow** z włączonym `release` tworzy prywatny prerelease. Import źródeł także tworzy tag zgodny z wersją `package.json`. Kolejne oficjalne wersje: zaktualizuj wersję w package.json/package-lock.json i wypchnij nowy tag.
+`.github/workflows/build.yml`: push/PR → testy → typecheck i build → test rzeczywistego Electron → instalator NSIS x64 → artefakty i SHA256. Push taga `v*` albo ręczne **Run workflow** z włączonym `release` tworzy publiczne wydanie testowe. Import źródeł także tworzy tag zgodny z wersją `package.json`. Kolejne oficjalne wersje: zaktualizuj wersję w package.json/package-lock.json i wypchnij nowy tag.
 
 Przesłanie aktualizacji przez przeglądarkę może mieć transportowe `wallet-source.zip`. Workflow materializuje je w zwykłe pliki źródłowe i usuwa archiwum w osobnym commicie; późniejsze zmiany to normalne commity. Archiwum nie zawiera zależności, danych portfela ani workflow. Zrzuty testów zawierają wyłącznie publiczne testowe adresy i fikstury historii, nigdy portfel użytkownika.
 
-Repozytorium i Releases pozostają prywatne. GitHub Actions wykorzystuje `GITHUB_TOKEN` ograniczony do repozytorium; nie wymaga PAT ani kluczy portfela. Klucze podpisujące instalator nie są skonfigurowane.
+Repozytorium i Releases są publiczne. GitHub Actions wykorzystuje `GITHUB_TOKEN` ograniczony do repozytorium; nie wymaga PAT ani kluczy portfela. Klucze podpisujące instalator nie są skonfigurowane.
 
 ## Historia wersji na GitHubie
 

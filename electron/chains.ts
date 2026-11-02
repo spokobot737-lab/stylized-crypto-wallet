@@ -15,7 +15,7 @@ export function units(text: string, decimals: number): bigint {
  const [whole,frac='']=text.split('.'); const value=BigInt(whole)*10n**BigInt(decimals)+BigInt(frac.padEnd(decimals,'0'));
  if(value<=0n) throw new Error('Kwota musi być większa od zera.'); return value;
 }
-export function display(value: bigint, decimals: number) { const s=value.toString().padStart(decimals+1,'0'); return `${s.slice(0,-decimals)}.${s.slice(-decimals)}`.replace(/\.?0+$/,''); }
+export function display(value: bigint, decimals: number) { if(decimals===0)return value.toString(); const s=value.toString().padStart(decimals+1,'0'); return `${s.slice(0,-decimals)}.${s.slice(-decimals)}`.replace(/\.?0+$/,''); }
 async function request(url: string, init?: RequestInit) { const response=await fetch(url,{...init,signal:AbortSignal.timeout(20000)}); if(!response.ok) throw new Error(`Węzeł zwrócił HTTP ${response.status}. Spróbuj później.`); return response; }
 const solConnection = (n:Network) => new Connection(endpoints[n].SOL,{commitment:'confirmed',fetch:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(20000)})});
 function ethProvider(n:Network) { const request=new FetchRequest(endpoints[n].ETH);request.timeout=20000;return new JsonRpcProvider(request,undefined,{batchMaxCount:1}); }

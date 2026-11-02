@@ -7,10 +7,13 @@ export type Quote = { id: string; walletId: string; chain: Chain; network: Netwo
 export type Transfer = { hash: string; chain: Chain; network: Network; to: string; amount: string; at: number; explorer: string; status: 'broadcast' | 'unknown' };
 export type Status = { exists: boolean; needsMigration: boolean; unlocked: boolean; accounts: Account[]; wallets: {id:string;name:string}[]; activeWalletId:string|null };
 export type ActivityDirection='in'|'out'|'self'|'other';
-export type ActivityItem={id:string;hash:string;chain:Chain;network:Network;networkLabel:string;direction:ActivityDirection;amount:string;attemptedAmount?:string;from:string[];to:string[];fee:string|null;feePaidByWallet:boolean;at:number|null;status:'confirmed'|'pending'|'failed'|'unknown';confirmations:number|null;block:number|null;source:'network'|'local';kind:string;amountBasis:'transfer'|'balance-change';explorer:string};
+export type ActivityItem={asset?:{standard:string;address:string;tokenId?:string;symbol:string};id:string;hash:string;chain:Chain;network:Network;networkLabel:string;direction:ActivityDirection;amount:string;attemptedAmount?:string;from:string[];to:string[];fee:string|null;feePaidByWallet:boolean;at:number|null;status:'confirmed'|'pending'|'failed'|'unknown';confirmations:number|null;block:number|null;source:'network'|'local';kind:string;amountBasis:'transfer'|'balance-change';explorer:string};
 export type ActivityCursor={SOL?:string|null;ETH?:string|null;BTC?:string|null};
-export type ActivityPage={items:ActivityItem[];next:ActivityCursor;warnings:{chain:Chain;message:string}[];fetchedAt:number};
+export type ActivityPage={unavailable?:Chain[];items:ActivityItem[];next:ActivityCursor;warnings:{chain:Chain;message:string}[];fetchedAt:number};
 export interface WalletAPI extends AssetsAPI {
+ chat(input:{walletId:string;action:string;[key:string]:unknown}):Promise<any>;
+ copyChat(value:string):Promise<void>;
+ chatImage(value:string,avatar:boolean):Promise<string>;
  copyText(value:string):Promise<void>;
  activity(input:{network:Network;chain?:Chain;cursor?:string}):Promise<ActivityPage>;
  status(network: Network): Promise<Status>;

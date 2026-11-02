@@ -6,7 +6,7 @@ export type NftStandard = 'ERC721' | 'ERC1155' | 'CORE' | 'METAPLEX' | 'PNFT' | 
 export type Nft = {
  id:string; chain:AssetChain; network:Network; address:string; tokenId?:string;
  standard:NftStandard; name:string; description:string; image?:string; uri?:string;
- collection?:string; quantity:string; transferable:boolean; warning?:string;
+ owned?:boolean; collection?:string; quantity:string; transferable:boolean; warning?:string;
 };
 export type NftPage = {items:Nft[]; cursor?:string; warning?:string};
 export type NftQuery = {chain:AssetChain; network:Network; mode:'owned'|'explore'; scope?:'asset'|'collection'; query?:string; tokenId?:string; cursor?:string};
@@ -26,7 +26,7 @@ export interface AssetsAPI {
  saveIntegrations(input:Partial<Record<keyof IntegrationKeys,string|null>>):Promise<IntegrationStatus>;
  configure(input:{network?:Network;language?:Language}):Promise<void>;
  nfts(input:NftQuery):Promise<NftPage>;
- nftImage(uri:string):Promise<string>;
+ nftImage(uri:string,retry?:boolean):Promise<string>;
  uploadMetadata(input:MetadataUpload):Promise<{uri:string;image:string}>;
  usdc(network:Network):Promise<UsdcBalance[]>;
  assetQuote(input:AssetIntent):Promise<AssetQuote>;
