@@ -1,4 +1,5 @@
 // @ts-nocheck
+import {paymentSchema} from '../../shared/payment';
 import {copyFile,readFile} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {randomUUID} from 'node:crypto';
@@ -9,9 +10,9 @@ import {atomicWrite} from '../vault';
 import {CHAT_RELAYS,invitationSchema,verifyInvitation,encodeInvitation,decodeInvitation,wrapMessage,readMessage} from './protocol';
 import {inboxCapability,makeProfile,verifyProfile,profileDataSchema,readPayload,compareMessages,appPayloadSchema} from './protocol';
 import {createRelay} from './transport';
-var messageSchema = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), peer: z.string().max(42), peerKey: z.string().regex(/^[a-f0-9]{64}$/), text: z.string().max(4e3), image:z.string().max(11000).optional(), at: z.number().int(), outgoing: z.boolean(), status: z.enum(["oczekuje", "przyj\u0119to przez relay", "b\u0142\u0105d"]), recovered: z.boolean().optional() }).strict();
+var messageSchema = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), peer: z.string().max(42), peerKey: z.string().regex(/^[a-f0-9]{64}$/), text: z.string().max(4e3), payment:paymentSchema.optional(),image:z.string().max(11000).optional(), at: z.number().int(), outgoing: z.boolean(), status: z.enum(["oczekuje", "przyj\u0119to przez relay", "b\u0142\u0105d"]), recovered: z.boolean().optional() }).strict();
 var targetSchema = z.object({ event: z.custom((e) => !!e && typeof e === "object" && JSON.stringify(e).length < 52000), relays: z.array(z.enum(CHAT_RELAYS)).max(3), accepted: z.array(z.enum(CHAT_RELAYS)).max(3) }).strict();
-var stateSchema = z.object({ version: z.literal(2), requests:z.array(z.object({invitation:invitationSchema,id:z.string(),at:z.number(),receivedAt:z.number().optional()}).strict()).max(30).default([]), rejected:z.array(z.string()).max(100).default([]), controlSeen:z.array(z.string()).max(1000).default([]), shared:z.boolean().default(false), identitySince:z.number().optional(), walletId: z.string().uuid(), identity: invitationSchema, contacts: z.array(z.object({ invitation: invitationSchema, blocked: z.boolean(), pending:z.boolean().optional(), alias:z.string().max(32).optional(),since:z.number().optional() }).strict()).max(100), messages: z.array(messageSchema).max(2e3), outbox: z.array(z.object({ id: z.string(), peer: z.string(), targets: z.array(targetSchema).length(2), attempts: z.number().int().nonnegative(), control:z.boolean().optional(), invitation:invitationSchema.optional() }).strict()).max(200) }).strict();
+var stateSchema = z.object({ version: z.literal(3), draft:profileDataSchema.optional(),requests:z.array(z.object({invitation:invitationSchema,id:z.string(),at:z.number(),receivedAt:z.number().optional()}).strict()).max(30).default([]), rejected:z.array(z.string()).max(100).default([]), controlSeen:z.array(z.string()).max(1000).default([]), shared:z.boolean().default(false), identitySince:z.number().optional(), walletId: z.string().uuid(), identity: invitationSchema, contacts: z.array(z.object({ invitation: invitationSchema, blocked: z.boolean(), pending:z.boolean().optional(), alias:z.string().max(32).optional(),since:z.number().optional() }).strict()).max(100), messages: z.array(messageSchema).max(2e3), outbox: z.array(z.object({ id: z.string(), peer: z.string(), targets: z.array(targetSchema).length(2), attempts: z.number().int().nonnegative(), control:z.boolean().optional(), invitation:invitationSchema.optional() }).strict()).max(200) }).strict();
 class ChatStore {
   constructor(path, key2, walletId, address2, valid, factory = createRelay) {
     this.path = path;
@@ -61,18 +62,19 @@ class ChatStore {
       this.guard();
       if (file.length > 32e6) throw 0;
       const envelope2 = z.object({ version: z.literal(1), data: z.string().max(32e6) }).strict().parse(JSON.parse(file));
-      const raw=JSON.parse(decrypt(envelope2.data,this.storageKey));
+      const raw=JSON.parse(decrypt(envelope2.data,this.storageKey));const sourceVersion=raw.version;
       if(raw.version===1){try{await copyFile(this.path,this.path+'.v1.bak',constants.COPYFILE_EXCL);}catch(e){if(e.code!=='EEXIST')throw e;}
         // Kolejka zachowuje oryginalny rumor. Naprawiamy czas tylko tam, gdzie jest dowód.
         for(const q of raw.outbox||[]){const event=q.targets?.[0]?.event;if(event){const rumor=readMessage(event,this.key);const m=raw.messages.find(m=>m.id===rumor.id);if(m)m.at=rumor.created_at*1000;}}
         for(const m of raw.messages||[])m.at=Math.floor(m.at/1000)*1000;raw.version=2;
       }
+      if(raw.version===2){if(sourceVersion===2){try{await copyFile(this.path,this.path+'.v2.bak',constants.COPYFILE_EXCL);}catch(e){if(e.code!=='EEXIST')throw e;}}raw.version=3;}
       const state=stateSchema.parse(raw); state.messages.sort(compareMessages);
       if (state.walletId !== this.walletId || state.identity.binding.publicKey !== this.pubkey || state.identity.binding.address !== this.address) throw 0;
       verifyInvitation(state.identity, true);
       for (const c of state.contacts) verifyInvitation(c.invitation, true);
       this.state = state;
-      if(raw.version===2)await this.save();
+      if(raw.version===3)await this.save();
       this.start();
       return true;
     } catch (e) {
@@ -85,7 +87,7 @@ class ChatStore {
       this.guard();
       if (identity.binding.publicKey !== this.pubkey || identity.binding.address !== this.address) throw new Error("Klucz nie pasuje do portfela.");
       if (this.state && !replace) {this.state.identitySince=Math.min(this.state.identitySince??Date.parse(this.state.identity.binding.createdAt),since);this.state.identity = {...identity,...this.state.identity.profile?{profile:this.state.identity.profile}:{}};if(this.state.shared&&this.state.identity.profile)for(const c of this.state.contacts)if(!c.blocked&&!c.pending&&(c.invitation.profile||this.capabilities.has(c.invitation.binding.publicKey)))this.queueControl(c.invitation,{version:2,type:'request',invitation:this.state.identity});}
-      else this.state = { version: 2, identitySince:since, walletId: this.walletId, identity, contacts: [], messages: [], outbox: [], requests:[],rejected:[],controlSeen:[],shared:false };
+      else this.state = { version: 3, identitySince:since, walletId: this.walletId, identity, contacts: [], messages: [], outbox: [], requests:[],rejected:[],controlSeen:[],shared:false };
       await this.save();
       this.start();
     });
@@ -143,7 +145,7 @@ class ChatStore {
   view() {
     this.guard();
     const relays = CHAT_RELAYS.map((url) => ({ url, connected: !!this.peers.get(url)?.relay.connected })), connected = relays.filter((r) => r.connected).length;
-    return structuredClone({ active: !!this.state, address: this.address, publicKey: this.state ? this.pubkey : void 0, expiresAt: this.state?.identity.binding.expiresAt, connection: connected === relays.length ? "po\u0142\u0105czono" : connected ? "cz\u0119\u015Bciowe po\u0142\u0105czenie" : Date.now() - this.started < 12e3 ? "\u0142\u0105czenie" : "brak po\u0142\u0105czenia", relays, historyWarnings:[...this.peers.values()].map(p=>p.relay.historyWarning).filter(Boolean).concat(this.state?.messages.length>=2000?['Osiągnięto limit 2000 wiadomości. Dalszy odbiór historii jest wstrzymany; dotychczasowe dane zachowano.']:[]), contacts: this.state?.contacts || [], requests:this.state?.requests||[], profile:this.state?.identity.profile, shared:this.state?.shared||false, messages: [...(this.state?.messages||[])].sort(compareMessages).map((m) => ({ ...m, retryable: this.state.outbox.some((q) => q.id === m.id) })) || [] });
+    return structuredClone({ active: !!this.state, address: this.address, publicKey: this.state ? this.pubkey : void 0, expiresAt: this.state?.identity.binding.expiresAt, connection: connected === relays.length ? "po\u0142\u0105czono" : connected ? "cz\u0119\u015Bciowe po\u0142\u0105czenie" : Date.now() - this.started < 12e3 ? "\u0142\u0105czenie" : "brak po\u0142\u0105czenia", relays, historyWarnings:[...this.peers.values()].map(p=>p.relay.historyWarning).filter(Boolean).concat(this.state?.messages.length>=2000?['Osiągnięto limit 2000 wiadomości. Dalszy odbiór historii jest wstrzymany; dotychczasowe dane zachowano.']:[]), contacts: this.state?.contacts || [], requests:this.state?.requests||[], profile:this.state?.identity.profile,draft:this.state?.draft, shared:this.state?.shared||false, messages: [...(this.state?.messages||[])].sort(compareMessages).map((m) => ({ ...m, retryable: this.state.outbox.some((q) => q.id === m.id) })) || [] });
   }
   identity() {
     this.guard();
@@ -155,10 +157,13 @@ class ChatStore {
     const old=this.state.identity.profile;const clean=profileDataSchema.parse(data);
     if(old&&JSON.stringify(verifyProfile(old,this.pubkey))===JSON.stringify(clean))return;
     const profile=makeProfile(this.key,clean,Math.max(Math.floor(Date.now()/1000),(old?.created_at||0)+1));
+    if(Buffer.byteLength(JSON.stringify({version:2,type:'request',invitation:{...this.state.identity,profile}}))>13000)throw Error('Profil przekracza limit szyfrowanego transportu. Skróć HTML, opis lub usuń baner.');
     this.state.identity.profile=profile;
     for(const c of this.state.contacts)if(this.state.shared&&!c.blocked&&!c.pending&&(c.invitation.profile||this.capabilities.has(c.invitation.binding.publicKey)))this.queueControl(c.invitation,{version:2,type:'profile',profile});
     await this.save();
   });}
+  async saveDraft(data){return this.mutate(async()=>{this.state.draft=profileDataSchema.parse(data);await this.save();});}
+  async publishDraft(){if(!this.state.draft)throw Error('Brak szkicu profilu.');await this.updateProfile({...this.state.draft,independent:true});}
   queueControl(invitation,payload){
     if(this.state.outbox.length>=200)throw Error('Kolejka czatu jest pełna.');
     const b=invitation.binding;const {events,id}=wrapMessage(this.key,b.publicKey,JSON.stringify(appPayloadSchema.parse(payload)),randomUUID(),true);
@@ -227,18 +232,19 @@ class ChatStore {
       await this.save();
     });
   }
-  async send(address2, text2, image:string|undefined=undefined) {
+  async send(address2, text2, image:string|undefined=undefined,payment:any=undefined) {
     await this.mutate(async () => {
       const s = this.state;
+      if(payment&&s.messages.some(m=>m.peer===address2&&m.payment?.hash===payment.hash))return;
       if (!s) throw new Error("Najpierw aktywuj czat.");
       verifyInvitation(s.identity);
       const contact = s.contacts.find((c) => c.invitation.binding.address === address2);
       if (!contact || contact.blocked || contact.pending) throw new Error("Kontakt jest niedost\u0119pny lub zablokowany.");
       verifyInvitation(contact.invitation);
-      text2 = z.string().trim().max(4e3).parse(text2);if(!image&&!text2)throw Error("Napisz wiadomość.");
+      text2 = z.string().trim().max(4e3).parse(text2);if(!image&&!text2&&!payment)throw Error("Napisz wiadomość.");
       if (s.outbox.length >= 200 || s.messages.length >= 2e3) throw new Error("Osi\u0105gni\u0119to lokalny limit wiadomo\u015Bci. Wys\u0142anie zatrzymane.");
-      const peer = contact.invitation.binding, { id, events,at } = wrapMessage(this.key, peer.publicKey, image?JSON.stringify(appPayloadSchema.parse({version:2,type:"image",image,text:text2})):text2, randomUUID(),!!image);
-      s.messages.push({ id, peer: address2, peerKey: peer.publicKey, text: text2, ...(image?{image}:{}),at, outgoing: true, status: "oczekuje" });
+      const peer = contact.invitation.binding, { id, events,at } = wrapMessage(this.key, peer.publicKey, payment?JSON.stringify(appPayloadSchema.parse({version:2,type:"transfer",payment})):image?JSON.stringify(appPayloadSchema.parse({version:2,type:"image",image,text:text2})):text2, randomUUID(),!!image||!!payment);
+      s.messages.push({ id, peer: address2, peerKey: peer.publicKey, text: text2, ...(image?{image}:{}),...(payment?{payment}:{}),at, outgoing: true, status: "oczekuje" });
       s.messages.sort(compareMessages);
       s.outbox.push({ id, peer: address2, attempts: 0, targets: [{ event: events[0], relays: s.identity.binding.relays, accepted: [] }, { event: events[1], relays: this.dmRelays.get(peer.publicKey)?.length?this.dmRelays.get(peer.publicKey):peer.relays, accepted: [] }] });
       await this.save();
@@ -306,7 +312,7 @@ class ChatStore {
       const at=rumor.created_at*1000;let contact=s.contacts.find(c=>c.invitation.binding.publicKey===peerKey);
       if(contact?.blocked||s.rejected.includes(peerKey))return;
       const payload=readPayload(rumor);
-      if(payload&&payload.type!=='image'){
+      if(payload&&payload.type!=='image'&&payload.type!=='transfer'){
         if(s.controlSeen.includes(rumor.id)||outgoing){this.remember(event.id);return;}
         if(payload.type==='request'||payload.type==='accept'){
           const invite=verifyInvitation(payload.invitation);const b=invite.binding;
@@ -333,7 +339,7 @@ class ChatStore {
       const existing=s.messages.find(m=>m.id===rumor.id);
       if(existing){if(existing.peerKey!==peerKey||existing.outgoing!==outgoing)return;existing.at=at;s.messages.sort(compareMessages);await this.save();this.remember(event.id);return;}
       if(s.messages.length>=2000)return;
-      s.messages.push({id:rumor.id,peer:binding.address,peerKey,text:payload?payload.text:rumor.content,...(payload?{image:payload.image}:{}),at,outgoing,status:'przyjęto przez relay',...(outgoing?{recovered:true}:{})});
+      s.messages.push({id:rumor.id,peer:binding.address,peerKey,text:payload?(payload.type==='image'?payload.text:''):rumor.content,...(payload?.type==='image'?{image:payload.image}:{}),...(payload?.type==='transfer'?{payment:payload.payment}:{}),at,outgoing,status:'przyjęto przez relay',...(outgoing?{recovered:true}:{})});
       s.messages.sort(compareMessages);await this.save();this.remember(event.id);
     });
   }

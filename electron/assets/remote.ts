@@ -32,7 +32,7 @@ export async function remoteBytes(input:string,limit:number,redirects=0):Promise
 export function dataBytes(uri:string,limit:number){
  if(uri.length>limit*2+200)throw Error('Dane URI są zbyt duże.');
  const match=/^data:([^;,]+)(;charset=utf-8)?(;base64)?,([\s\S]*)$/i.exec(uri);if(!match)throw Error('Nieprawidłowe dane URI.');
- const mime=match[1].toLowerCase();if(!['application/json','image/png','image/jpeg','image/webp','image/svg+xml'].includes(mime))throw Error('Nieobsługiwany format danych URI.');
+ const mime=match[1].toLowerCase();if(!['text/plain','application/pdf','application/zip','application/octet-stream','application/json','image/png','image/jpeg','image/webp','image/svg+xml'].includes(mime))throw Error('Nieobsługiwany format danych URI.');
  if(match[3]&&!/^[a-zA-Z0-9+/=\s]*$/.test(match[4]))throw Error('Nieprawidłowe base64.');
  const bytes=match[3]?Buffer.from(match[4],'base64'):Buffer.from(decodeURIComponent(match[4]));if(bytes.length>limit)throw Error('Dane przekraczają dozwolony rozmiar.');return {bytes,mime};
 }

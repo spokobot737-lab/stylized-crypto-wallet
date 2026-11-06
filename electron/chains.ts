@@ -6,19 +6,20 @@ import { accounts, btcKey, btcNetwork, ethKey, solKey } from './keys';
 import type { Chain, Network, Balance } from './types';
 initEccLib(ecc);
 export const endpoints = {
- mainnet:{SOL:'https://api.mainnet-beta.solana.com',ETH:'https://ethereum-rpc.publicnode.com',BTC:'https://blockstream.info/api'},
- testnet:{SOL:'https://api.devnet.solana.com',ETH:'https://ethereum-sepolia-rpc.publicnode.com',BTC:'https://blockstream.info/testnet/api'},
+ mainnet:{SOL:'https://api.mainnet-beta.solana.com',RH:'https://rpc.mainnet.chain.robinhood.com',ETH:'https://ethereum-rpc.publicnode.com',BTC:'https://blockstream.info/api'},
+ testnet:{SOL:'https://api.devnet.solana.com',RH:'https://rpc.testnet.chain.robinhood.com',ETH:'https://ethereum-sepolia-rpc.publicnode.com',BTC:'https://blockstream.info/testnet/api'},
 };
-export const chainId = (n: Network) => n==='mainnet'?1n:11155111n;
+export const chainId = (n: Network,chain:string='ETH') => chain==='RH'?(n==='mainnet'?4663n:46630n):(n==='mainnet'?1n:11155111n);
 export function units(text: string, decimals: number): bigint {
- if (!new RegExp(`^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,${decimals}})?$`).test(text)) throw new Error(`Nieprawidłowa kwota. Maksymalnie ${decimals} miejsc po przecinku.`);
+ if(!Number.isInteger(decimals)||decimals<0||decimals>36)throw Error('Nieprawidłowa precyzja aktywa.');
+ if (!(decimals===0?/^(0|[1-9][0-9]{0,15})$/:new RegExp(`^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,${decimals}})?$`)).test(text)) throw new Error(`Nieprawidłowa kwota. Maksymalnie ${decimals} miejsc po przecinku.`);
  const [whole,frac='']=text.split('.'); const value=BigInt(whole)*10n**BigInt(decimals)+BigInt(frac.padEnd(decimals,'0'));
  if(value<=0n) throw new Error('Kwota musi być większa od zera.'); return value;
 }
 export function display(value: bigint, decimals: number) { if(decimals===0)return value.toString(); const s=value.toString().padStart(decimals+1,'0'); return `${s.slice(0,-decimals)}.${s.slice(-decimals)}`.replace(/\.?0+$/,''); }
 async function request(url: string, init?: RequestInit) { const response=await fetch(url,{...init,signal:AbortSignal.timeout(20000)}); if(!response.ok) throw new Error(`Węzeł zwrócił HTTP ${response.status}. Spróbuj później.`); return response; }
 const solConnection = (n:Network) => new Connection(endpoints[n].SOL,{commitment:'confirmed',fetch:(url,init)=>fetch(url,{...init,signal:AbortSignal.timeout(20000)})});
-function ethProvider(n:Network) { const request=new FetchRequest(endpoints[n].ETH);request.timeout=20000;return new JsonRpcProvider(request,undefined,{batchMaxCount:1}); }
+function ethProvider(n:Network,chain:'ETH'|'RH'='ETH') { const request=new FetchRequest(endpoints[n][chain]);request.timeout=20000;return new JsonRpcProvider(request,undefined,{batchMaxCount:1}); }
 export async function balances(seed:Buffer, network:Network): Promise<Balance[]> {
  return Promise.all(accounts(seed,network).map(async account=>{
   try {
@@ -45,7 +46,7 @@ export function selectCoins(utxos:{txid:string;vout:number;value:number}[],amoun
  throw new Error('Za mało potwierdzonych BTC na kwotę i opłatę.');
 }
 export async function prepare(seed:Buffer, chain:Chain, network:Network,to:string,amount:string):Promise<Prepared>{
- const account=accounts(seed,network).find(a=>a.chain===chain)!;
+ const account=accounts(seed,network).find(a=>a.chain===(chain==='RH'?'ETH':chain))!;
  if(chain==='SOL'){
   const value=units(amount,9); if(value>BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Kwota przekracza obsługiwany zakres SOL.');
   const recipient=new PublicKey(to); if(!PublicKey.isOnCurve(recipient.toBytes())) throw new Error('W tej wersji wysyłaj SOL tylko na zwykłe adresy portfeli.');
@@ -57,18 +58,18 @@ export async function prepare(seed:Buffer, chain:Chain, network:Network,to:strin
   if(!recipientInfo&&value<BigInt(await connection.getMinimumBalanceForRentExemption(0))) throw new Error('Kwota jest za mała na utworzenie nowego konta SOL (rent exemption).');
   return {chain,network,to:recipient.toBase58(),amount,from:account.address,fee:display(BigInt(fee),9),feeLabel:'opłata sieciowa',payload:{tx,latest}};
  }
- if(chain==='ETH'){
+ if(chain==='ETH'||chain==='RH'){
   if(!isAddress(to)) throw new Error('Nieprawidłowy adres Ethereum.'); const recipient=getAddress(to); if(recipient==='0x0000000000000000000000000000000000000000') throw new Error('Adres zerowy jest zablokowany.');
-  const value=units(amount,18),p=ethProvider(network);
+  const value=units(amount,18),p=ethProvider(network,chain);
   try{
-   if((await p.getNetwork()).chainId!==chainId(network)) throw new Error('Niezgodna sieć RPC.');
+   if((await p.getNetwork()).chainId!==chainId(network,chain)) throw new Error('Niezgodna sieć RPC.');
    if(await p.getCode(recipient)!=='0x') throw new Error('Ta wersja obsługuje przelewy ETH na zwykłe konta, bez wywoływania kontraktów.');
    const [gasEstimate,feeData,nonce,balance]=await Promise.all([p.estimateGas({from:account.address,to:recipient,value}),p.getFeeData(),p.getTransactionCount(account.address,'pending'),p.getBalance(account.address,'pending')]);
    if(!feeData.maxFeePerGas||feeData.maxPriorityFeePerGas===null) throw new Error('Brak danych opłaty EIP-1559.');
    const gasLimit=gasEstimate*120n/100n;const fee=gasLimit*feeData.maxFeePerGas;
    if(fee>parseEther('0.05')) throw new Error('Opłata przekracza limit bezpieczeństwa 0,05 ETH.');
    if(balance<value+fee) throw new Error('Za mało ETH na kwotę i maksymalną opłatę.');
-   return {chain,network,to:recipient,amount,from:account.address,fee:formatEther(fee),feeLabel:'maks. opłata (EIP-1559)',payload:{to:recipient,value,chainId:chainId(network),nonce,type:2,gasLimit,maxFeePerGas:feeData.maxFeePerGas,maxPriorityFeePerGas:feeData.maxPriorityFeePerGas}};
+   return {chain,network,to:recipient,amount,from:account.address,fee:formatEther(fee),feeLabel:'maks. opłata (EIP-1559)',payload:{to:recipient,value,chainId:chainId(network,chain),nonce,type:2,gasLimit,maxFeePerGas:feeData.maxFeePerGas,maxPriorityFeePerGas:feeData.maxPriorityFeePerGas}};
   }finally{p.destroy();}
  }
  const value=units(amount,8); if(value<546n) throw new Error('Minimum odbiorcy: 546 satoshi.');
@@ -89,11 +90,12 @@ export async function prepare(seed:Buffer, chain:Chain, network:Network,to:strin
  psbt.addOutput({script:destination,value});if(selection.change>0n)psbt.addOutput({script:ownScript,value:selection.change});
  return {chain,network,to,amount,from:account.address,fee:display(selection.fee,8),feeLabel:`${rate} sat/vB · ${selection.chosen.length} wejść`,payload:psbt};
 }
+export async function revalidateNative(prepared:Prepared){if(prepared.chain!=='ETH'&&prepared.chain!=='RH')return;const p=ethProvider(prepared.network,prepared.chain),tx=prepared.payload as any;try{if((await p.getNetwork()).chainId!==chainId(prepared.network,prepared.chain))throw Error('Niezgodna sieć RPC.');const [nonce,balance,estimate,code]=await Promise.all([p.getTransactionCount(prepared.from,'pending'),p.getBalance(prepared.from,'pending'),p.estimateGas({...tx,from:prepared.from}),p.getCode(prepared.to)]);if(nonce!==tx.nonce||balance<BigInt(tx.value)+BigInt(tx.gasLimit)*BigInt(tx.maxFeePerGas)||estimate>BigInt(tx.gasLimit)||code!=='0x')throw Error('Saldo, opłata lub odbiorca zmieniły się. Przygotuj przelew ponownie.');}finally{p.destroy();}}
 export async function sign(seed:Buffer,prepared:Prepared):Promise<{raw:string;hash:string}>{
  if(prepared.chain==='SOL'){
   const {tx}=prepared.payload as {tx:SolTransaction};const key=solKey(seed);try{tx.sign(key);const raw=tx.serialize(); const bs58=(await import('bs58')).default;return {raw:raw.toString('base64'),hash:bs58.encode(tx.signature!)};}finally{key.secretKey.fill(0);}
  }
- if(prepared.chain==='ETH'){const raw=await ethKey(seed).signTransaction(prepared.payload as any);return {raw,hash:EthTransaction.from(raw).hash!};}
+ if(prepared.chain==='ETH'||prepared.chain==='RH'){const raw=await ethKey(seed).signTransaction(prepared.payload as any);return {raw,hash:EthTransaction.from(raw).hash!};}
  const psbt=prepared.payload as Psbt;const key=btcKey(seed,prepared.network);psbt.signAllInputs(key);
  if(!psbt.validateSignaturesOfAllInputs((pub,hash,sig)=>ecc.verify(hash,pub,sig)))throw new Error('Nieprawidłowy podpis BTC.');
  psbt.finalizeAllInputs();const tx=psbt.extractTransaction();const actual=psbt.getFee();if(actual!==units(prepared.fee,8))throw new Error('Niezgodna opłata BTC.');
@@ -101,12 +103,13 @@ export async function sign(seed:Buffer,prepared:Prepared):Promise<{raw:string;ha
 }
 export async function broadcast(prepared:Prepared,signed:{raw:string;hash:string}){
  if(prepared.chain==='SOL')return solConnection(prepared.network).sendRawTransaction(Buffer.from(signed.raw,'base64'),{skipPreflight:false,maxRetries:3});
- if(prepared.chain==='ETH'){const p=ethProvider(prepared.network);try{if((await p.getNetwork()).chainId!==chainId(prepared.network))throw new Error('Niezgodna sieć RPC.');return (await p.broadcastTransaction(signed.raw)).hash;}finally{p.destroy();}}
+ if(prepared.chain==='ETH'||prepared.chain==='RH'){const p=ethProvider(prepared.network,prepared.chain==='RH'?'RH':'ETH');try{if((await p.getNetwork()).chainId!==chainId(prepared.network,prepared.chain))throw new Error('Niezgodna sieć RPC.');return (await p.broadcastTransaction(signed.raw)).hash;}finally{p.destroy();}}
  return (await (await request(`${endpoints[prepared.network].BTC}/tx`,{method:'POST',headers:{'Content-Type':'text/plain'},body:signed.raw})).text()).trim();
 }
 export function explorer(chain:Chain,network:Network,hash:string){
  if(chain==='SOL'){if(!/^[1-9A-HJ-NP-Za-km-z]{64,100}$/.test(hash))throw new Error('Nieprawidłowy hash.');return `https://explorer.solana.com/tx/${hash}${network==='testnet'?'?cluster=devnet':''}`;}
  if(!/^(0x)?[a-fA-F0-9]{64}$/.test(hash))throw new Error('Nieprawidłowy hash.');
+ if(chain==='RH')return `https://${network==='mainnet'?'robinhoodchain.blockscout.com':'explorer.testnet.chain.robinhood.com'}/tx/${hash}`;
  if(chain==='ETH')return `https://${network==='testnet'?'sepolia.':''}etherscan.io/tx/${hash}`;
  return `https://blockstream.info/${network==='testnet'?'testnet/':''}tx/${hash}`;
 }

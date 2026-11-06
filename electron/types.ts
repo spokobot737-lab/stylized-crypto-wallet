@@ -1,5 +1,5 @@
 import type { AssetsAPI } from './assets/types';
-export type Chain = 'SOL' | 'ETH' | 'BTC';
+export type Chain = 'SOL' | 'ETH' | 'BTC' | 'RH';
 export type Network = 'mainnet' | 'testnet';
 export type Account = { chain: Chain; address: string; path: string; networkLabel: string };
 export type Balance = Account & { balance: string | null; error?: string };
@@ -8,9 +8,11 @@ export type Transfer = { hash: string; chain: Chain; network: Network; to: strin
 export type Status = { exists: boolean; needsMigration: boolean; unlocked: boolean; accounts: Account[]; wallets: {id:string;name:string}[]; activeWalletId:string|null };
 export type ActivityDirection='in'|'out'|'self'|'other';
 export type ActivityItem={asset?:{standard:string;address:string;tokenId?:string;symbol:string};id:string;hash:string;chain:Chain;network:Network;networkLabel:string;direction:ActivityDirection;amount:string;attemptedAmount?:string;from:string[];to:string[];fee:string|null;feePaidByWallet:boolean;at:number|null;status:'confirmed'|'pending'|'failed'|'unknown';confirmations:number|null;block:number|null;source:'network'|'local';kind:string;amountBasis:'transfer'|'balance-change';explorer:string};
-export type ActivityCursor={SOL?:string|null;ETH?:string|null;BTC?:string|null};
+export type ActivityCursor={SOL?:string|null;ETH?:string|null;BTC?:string|null;RH?:string|null};
 export type ActivityPage={unavailable?:Chain[];items:ActivityItem[];next:ActivityCursor;warnings:{chain:Chain;message:string}[];fetchedAt:number};
 export interface WalletAPI extends AssetsAPI {
+ community(input:{walletId:string;action:string;[key:string]:unknown}):Promise<any>;
+ networkAssets(input:{action:string;network:Network;[key:string]:unknown}):Promise<any>;
  frameRun(input:{action:string;[key:string]:unknown}):Promise<any>;
  chat(input:{walletId:string;action:string;[key:string]:unknown}):Promise<any>;
  copyChat(value:string):Promise<void>;

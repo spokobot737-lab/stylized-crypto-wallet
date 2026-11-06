@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { WalletAPI } from './types';
 async function call(name:string,...args:unknown[]){const result=await ipcRenderer.invoke(`wallet:${name}`,...args);if(!result.ok)throw new Error(result.error);return result.value;}
 const api:WalletAPI={
+ nftFileHash:input=>call('nftFileHash',input),
+ community:input=>call('community',input),
+ networkAssets:input=>call('networkAssets',input),
+ creation:input=>call('creation',input),
  frameRun:input=>call('frameRun',input),
  chat:input=>call('chat',input),copyChat:value=>call('copyChat',value),chatImage:(value,avatar)=>call('chatImage',value,avatar),
  integrations:()=>call('integrations'),saveIntegrations:input=>call('saveIntegrations',input),configure:input=>call('configure',input),nfts:input=>call('nfts',input),nftImage:(uri,retry)=>call('nftImage',uri,retry),uploadMetadata:input=>call('uploadMetadata',input),usdc:network=>call('usdc',network),assetQuote:input=>call('assetQuote',input),assetSend:id=>call('assetSend',id),assetOperations:()=>call('assetOperations'),

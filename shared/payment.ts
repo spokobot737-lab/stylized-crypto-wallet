@@ -1,0 +1,3 @@
+import {z} from 'zod';
+export const paymentSchema=z.object({version:z.literal(1),chain:z.enum(['ETH','RH']),network:z.enum(['mainnet','testnet']),hash:z.string().regex(/^0x[a-fA-F0-9]{64}$/),from:z.string().regex(/^0x[a-fA-F0-9]{40}$/),to:z.string().regex(/^0x[a-fA-F0-9]{40}$/),asset:z.discriminatedUnion('kind',[z.object({kind:z.literal('native'),amount:z.string().max(40)}).strict(),z.object({kind:z.literal('token'),address:z.string().max(42),amount:z.string().max(40)}).strict(),z.object({kind:z.literal('nft'),address:z.string().max(42),tokenId:z.string().regex(/^\d{1,78}$/),standard:z.enum(['ERC721','ERC1155']),amount:z.string().max(78)}).strict()])}).strict();
+export type PaymentCard=z.infer<typeof paymentSchema>;
