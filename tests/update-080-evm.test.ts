@@ -11,15 +11,16 @@ import {JsonRpcProvider,Contract,Wallet,ContractFactory} from 'ethers';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {WalletService} from '../electron/service';
-import {endpoints,chainId,prepare,sign,broadcast,revalidateNative} from '../electron/chains';
+import {endpoints,chainId,prepare,sign,broadcast,revalidateNative,units} from '../electron/chains';
 import {ethKey,seedFrom} from '../electron/keys';
 import {remoteMetadata} from '../electron/assets/remote';
 import {verifyPayment} from '../electron/chat/payments';
 import {ROBINHOOD} from '../electron/assets/robinhood';
 const mnemonic='abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 test('local Robinhood-configured EVM: actual mint/file hash, independent device read, one issuance after restart, native transfer and forged payment rejection',{timeout:60000},async()=>{
+ assert.equal(units('123',0),123n);assert.throws(()=>units('1.1',0));assert.throws(()=>units('0',0));assert.throws(()=>units('1',-1));
  const seed=seedFrom(mnemonic),owner=ethKey(seed),other=Wallet.createRandom().address;const server=ganache.server({logging:{quiet:true},chain:{chainId:46630,hardfork:'shanghai'},wallet:{accounts:[{secretKey:owner.privateKey,balance:'0x3635c9adc5dea00000'}]}});await server.listen(0,'127.0.0.1');const old=endpoints.testnet.RH;endpoints.testnet.RH=`http://127.0.0.1:${(server.address() as any).port}`;const p=new JsonRpcProvider(endpoints.testnet.RH),dir=await mkdtemp(tmpdir()+'/frame-080-evm-');const protector={async seal(s:string){return Buffer.from(s);},async open(b:Buffer){return b.toString();}};
- const waitTx=(hash:string)=>p.waitForTransaction(hash,1,15000);
+ const waitTx=async(hash:string)=>{for(let attempt=0;attempt<100;attempt++){const receipt=await p.getTransactionReceipt(hash);if(receipt)return receipt;await new Promise(r=>setTimeout(r,100));}throw Error(`Local receipt unavailable: ${hash}`);};
  let wallet=new WalletService(dir,protector,()=>({connected:false,historyWarning:'',connect:async()=>{},publish:async()=>{throw Error('offline relay');},close(){}}));try{
  assert.equal((await p.getNetwork()).chainId,46630n);assert.equal(chainId('mainnet','RH'),4663n);assert.equal(ROBINHOOD.testnet.explorer,'https://explorer.testnet.chain.robinhood.com');await wallet.initialize('735291');await wallet.import({mnemonic,name:'Portfel testowy',passphrase:''});await wallet.configure({network:'testnet'});
  const original=Buffer.from('Publiczny plik demonstracyjny.'),row=await wallet.creation({action:'prepare',chain:'RH',network:'testnet',file:{filename:'note.txt',name:'Notatka',description:'Neutralne dane',base64:original.toString('base64'),storage:'embedded',publicConsent:true}});assert(!Array.isArray(row)&&'uri' in row);const intent={kind:'mint',creationId:row.id,chain:'RH',network:'testnet',mode:'single',name:row.name,symbol:'F',uri:row.uri,items:[]};const q=await wallet.assetQuote(intent),op=await wallet.assetSend(q.id,async()=>true);assert.equal(op.state,'broadcast');assert.equal((await waitTx(op.hashes[0]))?.status,1);const secondDevice=new JsonRpcProvider(endpoints.testnet.RH);try{const nft=new Contract(op.createdAddresses[0],['function tokenURI(uint256) view returns(string)','function ownerOf(uint256) view returns(address)','function totalMinted() view returns(uint256)'],secondDevice);const md=await remoteMetadata(await nft.tokenURI(1));assert.equal(md.properties.frame_original.hash,row.hash);assert.deepEqual(Buffer.from(md.properties.files[0].uri.split(',')[1],'base64'),original);assert.equal(await nft.ownerOf(1),owner.address);assert.equal(await nft.totalMinted(),1n);}finally{secondDevice.destroy();}
