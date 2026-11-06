@@ -57,6 +57,8 @@ jobs:
         run: node scripts/ui-frame-run.mjs
       - name: Verify FRAME Run inside Frame Wallet
         run: node scripts/ui-frame-run-wallet.mjs
+      - name: Verify all six offline games and isolated profile HTML
+        run: node scripts/ui-games-080.mjs && node scripts/ui-profile-080.mjs
       - name: Package Windows x64 NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -138,16 +140,16 @@ jobs:
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
           Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets. Archiwum Source code zawiera źródła, bez gotowego EXE.
-          FRAME Run wbudowane w aplikację: trening, rundy do 90 sekund i sterowanie spacją, kliknięciem lub dotykiem.
-          Punkty FRAME wymagają skonfigurowania oddzielnego serwera i konta. Serwer Node/SQLite i instrukcja: docs/FRAME-RUN.md. Publiczna usługa punktów nie jest wdrożona.
-          Poprawiona chronologia NIP-17, jednokierunkowe prośby o kontakt, prywatne nicki i awatary, małe obrazy E2EE.
-          Regulowane panele czatu, widok NFT wszystkich sieci i resolver SVG/data/IPFS, trwała paginowana aktywność.
-          Stablecoiny, widoczność widżetów i ruch Sześciokąty/Płynny/Wyłączone. Zachowane portfele, PIN, klucze i historia.
-          Opis testów na dwóch kontach, przyczyn i ograniczeń: docs/0.6.0-TESTING.md w źródłach tego wydania.
-          Moduły czatu odtworzono z rzeczywistego pakietu 0.5.0, następnie rozwinięto. Pochodzenie: docs/SOURCE-RECOVERY.md.
-          Testy automatyczne, test rzeczywistego Electron i kontrola zależności pakietu na Windows zakończone przed publikacją.
-          Nie testowano pełnego procesu instalowania NSIS na prywatnym komputerze. Instalator bez Authenticode.
-          Bezpłatne relaye/RPC/indexery nie gwarantują dostępności, retencji ani kompletnej historii. Obrazy Frame Chat są własnym małym rozszerzeniem, bez zewnętrznego hostingu.
+          Gry offline: FRAME Run (skok i kucanie), Szachy, Snake, Blackjack, Ruletka i Pasjans. Kredyty zabawowe nie są pieniędzmi ani saldem FRAME.
+          Uproszczone NFT z pliku, SHA-256, jawna publikacja i odzyskiwanie identycznej podpisanej transakcji. Ethereum/Robinhood do 8 KiB w metadanych; większe obsługiwane pliki do 5 MB wymagają własnego konta Pinata.
+          Przelewy EVM i NFT ze zweryfikowanego kontaktu czatu, niezależna weryfikacja kart i ponawianie samej wiadomości.
+          Prywatny szkic i publiczny profil, baner, HTML w sandboxie; publiczne forum Nostr i opt-in presence do 120 s. To nie jest bezpośrednie P2P.
+          Robinhood Chain 4663/46630 przez wspólny adapter EVM. Podane publiczne RPC zwróciły tutaj HTTP 403; brak potwierdzenia działania na rzeczywistym testnecie i mainnecie. Testy EVM są lokalne. Historia zależy od Blockscout; NFT bez pełnego indeksu wymagają importu.
+          Zachowano portfele, PIN, klucze, rozmowy i preferencje. Historia czatu v2 jest kopiowana przed migracją do v3.
+          Szczegóły konfiguracji, testów i ograniczeń: docs/0.8.0-TESTING.md w źródłach tego wydania.
+          Sześć gier nie wymaga serwera. Zachowany opcjonalny tryb punktowy FRAME Run v1 wymaga osobnego serwera i konta, jak w 0.7.0; publiczna usługa punktów nie jest wdrożona.
+          CI sprawdza testy, typy, rzeczywisty Electron i pakiet Windows przed publikacją. Pełny ręczny proces instalacji NSIS na prywatnym komputerze nie był testowany. Instalator bez Authenticode.
+          Bezpłatne relaye, RPC i hosting mają limity i nie gwarantują wieczystego dostępu. Nie wykonano transakcji mainnet.
           "@
           $notes | Out-File -FilePath release/notes.md -Encoding utf8
           $assets = @(Get-ChildItem release/*.exe | ForEach-Object { $_.FullName })
