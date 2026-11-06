@@ -1,4 +1,5 @@
 // @ts-nocheck
+import {paymentSchema} from '../../shared/payment';
 // Odzyskano z instalatora 0.5.0; format danych i podpisów zachowany.
 import {z} from 'zod';
 import {imageSize} from 'image-size';
@@ -80,13 +81,14 @@ function importKey(value, password) {
 export {CHAT_RELAYS,hexKey,eventSchema,invitationSchema,statement,newBinding,verifyInvitation,encodeInvitation,decodeInvitation,wrapMessage,readMessage,exportKey,importKey};
 
 // Profil jest podpisany, ale publikowany wyłącznie w zaproszeniu lub E2EE.
-export const nftAvatarSchema=z.object({chain:z.enum(['ETH','SOL']),network:z.enum(['mainnet','testnet']),address:z.string().max(128),tokenId:z.string().max(78).optional(),standard:z.string().max(20),checkedAt:z.number().int()}).strict();
-export const profileDataSchema=z.object({version:z.literal(1),name:z.string().trim().min(1).max(32),avatar:z.string().max(4500).refine(validSmallImage).optional(),nft:nftAvatarSchema.optional()}).strict();
+export const nftAvatarSchema=z.object({chain:z.enum(['ETH','SOL','RH']),network:z.enum(['mainnet','testnet']),address:z.string().max(128),tokenId:z.string().max(78).optional(),standard:z.string().max(20),checkedAt:z.number().int()}).strict();
+export const profileDataSchema=z.object({version:z.literal(1),name:z.string().trim().min(1).max(32),independent:z.boolean().optional(),bio:z.string().max(280).optional(),banner:z.string().max(4500).refine(validSmallImage).optional(),html:z.string().max(2500).optional(),favorites:z.array(z.enum(['ETH','SOL','BTC','RH'])).max(4).optional(),avatar:z.string().max(4500).refine(validSmallImage).optional(),nft:nftAvatarSchema.optional()}).strict().refine(v=>JSON.stringify(v).length<=10500,'Profil przekracza limit 10 500 znaków.');
 export function makeProfile(key,data,at=Math.floor(Date.now()/1000)){return finalizeEvent({kind:0,created_at:at,tags:[['frame-profile','1']],content:JSON.stringify(profileDataSchema.parse(data))},key);}
 export function verifyProfile(event,pubkey){event=eventSchema.parse(event);if(event.kind!==0||event.pubkey!==pubkey||!verifyEvent(event)||event.created_at>Date.now()/1000+300||JSON.stringify(event.tags)!==JSON.stringify([['frame-profile','1']]))throw Error('Nieprawidłowy podpis profilu.');return profileDataSchema.parse(JSON.parse(event.content));}
 export const appPayloadSchema=z.discriminatedUnion('type',[
  z.object({version:z.literal(2),type:z.enum(['request','accept']),invitation:invitationSchema}).strict(),
  z.object({version:z.literal(2),type:z.literal('profile'),profile:eventSchema}).strict(),
+ z.object({version:z.literal(2),type:z.literal('transfer'),payment:paymentSchema}).strict(),
  z.object({version:z.literal(2),type:z.literal('image'),image:z.string().max(11000).refine(validSmallImage),text:z.string().max(1000)}).strict()
 ]);
 export function readPayload(rumor){if(!rumor.tags.some(t=>t[0]==='frame'&&t[1]==='2'))return null;return appPayloadSchema.parse(JSON.parse(rumor.content));}

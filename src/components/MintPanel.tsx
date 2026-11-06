@@ -1,58 +1,15 @@
-import { tr } from '../lib/i18n';
-import { useState } from 'react';
-import { UploadCloud, Sparkles } from 'lucide-react';
-import type { AssetChain, AssetIntent, AssetQuote, MintItem, MetadataUpload } from '../../electron/assets/types';
-import type { Network, WalletAPI } from '../../electron/types';
-import { Button, ErrorMessage, Field, Modal } from './ui';
-import { AssetReview, OperationResult } from './AssetOperation';
-import type { AssetOperation } from '../../electron/assets/types';
-export default function MintPanel({ api, chain, network, onDone }: {
-    api: WalletAPI;
-    chain: AssetChain;
-    network: Network;
-    onDone: () => void;
-}) {
-    const [mode, setMode] = useState<'single' | 'collection' | 'batch'>('single'), [name, setName] = useState(''), [symbol, setSymbol] = useState('FRAME'), [uri, setUri] = useState(''), [collection, setCollection] = useState(''), [description, setDescription] = useState(''), [manifest, setManifest] = useState(''), [file, setFile] = useState<File>(), [busy, setBusy] = useState(false), [error, setError] = useState(''), [quote, setQuote] = useState<AssetQuote>(), [result, setResult] = useState<AssetOperation>();
-    async function upload() { if (!file || busy)
-        return; setBusy(true); setError(''); try {
-        if (file.size > 5 * 1024 * 1024)
-            throw new Error(tr("Maksymalny rozmiar obrazu to 5 MB."));
-        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
-            throw new Error(tr("Wybierz obraz PNG, JPEG lub WebP."));
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += 8192)
-            binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-        const result = await api.uploadMetadata({ name, description, imageBase64: btoa(binary), mime: file.type as MetadataUpload['mime'] });
-        setUri(result.uri);
-    }
-    catch (e) {
-        setError((e as Error).message);
-    }
-    finally {
-        setBusy(false);
-    } }
-    async function prepare() { if (busy)
-        return; setBusy(true); setError(''); try {
-        let items: MintItem[] = [];
-        if (mode === 'batch') {
-            const parsed = JSON.parse(manifest);
-            if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 20)
-                throw new Error(tr("Manifest musi zawiera\u0107 od 1 do 20 element\u00F3w."));
-            items = parsed;
-        }
-        const intent: AssetIntent = { kind: 'mint', chain, network, mode, name: name.trim(), symbol: symbol.trim(), uri: uri.trim(), ...(collection.trim() ? { collection: collection.trim() } : {}), items };
-        setResult(undefined);
-        setQuote(await api.assetQuote(intent));
-    }
-    catch (e) {
-        setError(e instanceof SyntaxError ? tr("Manifest nie jest poprawnym plikiem JSON.") : (e as Error).message);
-    }
-    finally {
-        setBusy(false);
-    } }
-    return <div className="mint-panel panel"><div className="mint-intro"><Sparkles /><div><h2>{tr("Utw\u00F3rz NFT")}</h2><p className="muted small">{tr("Ethereum: ERC-721. Solana: Metaplex Core. Kolekcj\u0119 utworzysz najpierw, a nast\u0119pnie dodasz do niej seri\u0119 NFT.")}</p></div></div><div className="settings-tabs mint-modes">{([['single', tr("Pojedynczy NFT")], ['collection', tr("Nowa kolekcja")], ['batch', tr("Seria w kolekcji")]] as const).map(([value, label]) => <button key={value} aria-pressed={mode === value} className={mode === value ? 'active' : ''} onClick={() => { setMode(value); setError(''); }}>{label}</button>)}</div><form onSubmit={e => { e.preventDefault(); void prepare(); }}><div className="mint-fields"><Field label={tr("Nazwa")}><input value={name} onChange={e => setName(e.target.value)} placeholder={tr("Nazwa NFT lub kolekcji")} maxLength={32} required/></Field><Field label={tr("Symbol")}><input value={symbol} onChange={e => setSymbol(e.target.value)} maxLength={10} required/></Field>{mode !== 'collection' && <Field label={mode === 'batch' ? tr("Adres kolekcji") : tr("Adres kolekcji (opcjonalnie dla Solany)")}><input value={collection} onChange={e => setCollection(e.target.value)} placeholder={tr("Wklej adres istniej\u0105cej kolekcji")} disabled={mode === 'single' && chain === 'ETH'} required={mode === 'batch'}/></Field>}</div>{mode === 'batch' ? <Field label={tr("Manifest NFT (JSON)")} hint={tr("Od 1 do 20 element\u00F3w. Ka\u017Cdy element zawiera name oraz uri z publicznymi metadanymi. Ethereum obs\u0142uguje kolekcje utworzone w FRAME.")}><textarea rows={7} value={manifest} onChange={e => setManifest(e.target.value)} placeholder={'[{"name":"Nazwa NFT","uri":"ipfs://adres-metadanych"}]'} required/></Field> : <><Field label={tr("Adres metadanych JSON")} hint={tr("Publiczny adres IPFS lub HTTPS, maksymalnie 200 znak\u00F3w.")}><input value={uri} onChange={e => setUri(e.target.value)} placeholder="ipfs://adres-metadanych" maxLength={200} required/></Field><details className="upload-box"><summary><UploadCloud size={17}/>{tr("Prze\u015Blij grafik\u0119 i metadane do IPFS")}</summary><Field label={tr("Opis")}><textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} maxLength={1000}/></Field><Field label={tr("Grafika (PNG, JPEG lub WebP, do 5 MB)")}><input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setFile(e.target.files?.[0])}/></Field><p className="muted small">{tr("Pliki b\u0119d\u0105 publicznie dost\u0119pne w IPFS. Wymagany w\u0142asny token Pinata w ustawieniach. Przes\u0142anie plik\u00F3w nie mintuje NFT.")}</p><Button type="button" disabled={busy || !file || !name.trim()} onClick={() => void upload()}>{busy ? tr("Przesy\u0142anie\u2026") : tr("Prze\u015Blij do publicznego IPFS")}</Button></details></>}<ErrorMessage error={error}/><div className="mint-submit"><p className="muted small">{tr("Koszt w ")}{chain}{tr(" zobaczysz przed podpisaniem. NFT trafiaj\u0105 na adres aktywnego portfela.")}</p><Button type="submit" className="primary" disabled={busy}>{busy ? tr("Przygotowywanie\u2026") : tr("Sprawd\u017A koszt mintowania")}</Button></div></form>{quote && <Modal title={tr("Potwierd\u017A mintowanie")} eyebrow={`${chain} · ${network.toUpperCase()}`} onClose={() => setQuote(undefined)}>{result ? <OperationResult api={api} result={result}/> : <AssetReview quote={quote} api={api} onResult={value => { setResult(value); if (value.state === 'broadcast' && mode === 'collection' && value.createdAddresses[0]) {
-        setCollection(value.createdAddresses[0]);
-        setMode('batch');
-    } onDone(); }}/>}</Modal>}</div>;
+import {useEffect,useState} from 'react';
+import {tr} from '../lib/i18n';
+import type {WalletAPI,Network} from '../../electron/types';
+import type {AssetChain,AssetQuote,AssetOperation} from '../../electron/assets/types';
+import {Button,Field,ErrorMessage,Modal} from './ui';
+import {AssetReview,OperationResult} from './AssetOperation';
+import AdvancedMintPanel from './AdvancedMintPanel';
+export default function MintPanel({api,chain,network,onDone}:{api:WalletAPI;chain:AssetChain;network:Network;onDone:()=>void}){
+ const [file,setFile]=useState<File>(),[name,setName]=useState(''),[description,setDescription]=useState(''),[storage,setStorage]=useState<'embedded'|'pinata'>(chain==='SOL'?'pinata':'embedded'),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[stage,setStage]=useState(''),[error,setError]=useState(''),[quote,setQuote]=useState<AssetQuote>(),[result,setResult]=useState<AssetOperation>(),[rows,setRows]=useState<any[]>([]),[preview,setPreview]=useState(''),[target,setTarget]=useState(chain);
+ useEffect(()=>{let active=true;api.creation({action:'list'}).then(r=>{if(active)setRows(r);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[api]);
+ useEffect(()=>{if(!file)return;const url=URL.createObjectURL(file);setPreview(url);return()=>URL.revokeObjectURL(url);},[file]);
+ function choose(f?:File){if(!f)return;setError('');if(f.size>5*1024*1024){setError(tr('Maksymalny rozmiar pliku to 5 MB.'));return;}setFile(f);setName(f.name.replace(/\.[^.]+$/,'').slice(0,32));}
+ async function prepare(row?:any){if(busy)return;setBusy(true);setError('');try{let data=row;if(!data){if(!file||!consent)throw Error(tr('Wybierz plik i potwierdź publiczny zapis.'));setStage(tr('Przygotowywanie'));const b=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<b.length;i+=8192)binary+=String.fromCharCode(...b.subarray(i,i+8192));setStage(tr('Zapis pliku i metadanych'));data=await api.creation({action:'prepare',chain:target,network,file:{filename:file.name,name,description,base64:btoa(binary),storage,publicConsent:true}});setRows(old=>[data,...old]);}setStage(tr('Oczekiwanie na podpis'));setQuote(await api.assetQuote({kind:'mint',creationId:data.id,chain:data.chain,network:data.network,mode:'single',name:data.name,symbol:'FRAME',uri:data.uri,items:[]}));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ return <section className="panel mint-simple"><h2>{tr('Utwórz NFT z pliku')}</h2><form onSubmit={e=>{e.preventDefault();void prepare();}}><label className="file-drop" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();choose(e.dataTransfer.files[0]);}}>{tr('Wybierz lub przeciągnij plik')}<input type="file" aria-label={tr('Plik NFT')} onChange={e=>choose(e.target.files?.[0])}/></label>{file&&<p>{file.name} · {file.size.toLocaleString()} B</p>}{file&&['image/png','image/jpeg','image/webp'].includes(file.type)&&<img className="creation-preview" src={preview} alt={tr('Podgląd pliku')}/>}<Field label={tr('Nazwa')}><input required maxLength={32} value={name} onChange={e=>setName(e.target.value)}/></Field><Field label={tr('Opis (opcjonalnie)')}><textarea maxLength={1000} value={description} onChange={e=>setDescription(e.target.value)}/></Field><Field label={tr('Sieć')}><select value={target} onChange={e=>{setTarget(e.target.value as AssetChain);setStorage(e.target.value==='SOL'?'pinata':'embedded');}}><option value="ETH">Ethereum · {network}</option><option value="SOL">Solana · {network}</option><option value="RH">Robinhood Chain · {network}</option></select></Field><Field label={tr('Przechowywanie')}><select value={storage} onChange={e=>setStorage(e.target.value as typeof storage)}>{target!=='SOL'&&<option value="embedded">{tr('W łańcuchu, plik do 8 KiB')}</option>}<option value="pinata">{tr('Publiczny IPFS przez własne konto Pinata, do 5 MB')}</option></select></Field><p className="note">{storage==='embedded'?tr('Plik i jego SHA-256 będą zapisane w metadanych tokena. Zapis jest publiczny i zwiększa koszt gazu.'):tr('Plik przechowuje konto Pinata właściciela tokenu API. Dostępność trwa tak długo, jak usługa i pinowanie. Bez gwarancji wieczystego hostingu; formaty binarne są ograniczone.')}</p><label className="check-row"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>{tr('Rozumiem, że plik i metadane będą publiczne.')}</label><p className="muted small">{tr('NFT potwierdza własność tokena, nie wyłączność na plik. Plik można skopiować. Solana: metadane pozostają zmienialne przez uprawnionego właściciela; FRAME ERC-721: URI nie ma funkcji edycji.')}</p><ErrorMessage error={error}/><Button type="submit" className="primary" disabled={busy||!file||!name||!consent}>{busy?stage:tr('Utwórz NFT')}</Button><p role="status">{stage}</p></form>{rows.filter(r=>r.network===network).slice(0,5).map(r=><div className="operation-history-row" key={r.id}><div><strong>{r.name}</strong><p className="small mono wrap-anywhere">SHA-256: {r.hash}</p></div><Button disabled={busy||!!r.operationId} onClick={()=>void prepare(r)}>{r.operationId?tr('Sprawdź historię operacji'):tr('Wznów mintowanie')}</Button>{r.hasSigned&&<Button disabled={busy} onClick={()=>{setBusy(true);api.creation({action:'recover',id:r.id}).then(value=>setStage(value.message)).catch(e=>setError(e.message)).finally(()=>setBusy(false));}}>{tr('Ponów rozgłoszenie tej samej transakcji')}</Button>}</div>)}<details><summary>{tr('Zaawansowane: URI, kolekcje i serie')}</summary><AdvancedMintPanel api={api} chain={chain} network={network} onDone={onDone}/></details>{quote&&<Modal title={tr('Potwierdź mintowanie')} eyebrow={`${quote.chain} · ${quote.network}`} onClose={()=>setQuote(undefined)}>{result?<OperationResult result={result} api={api}/>:<AssetReview quote={quote} api={api} onResult={r=>{setResult(r);void api.creation({action:'list'}).then(setRows).catch(e=>setError(e.message));setStage(tr('Mintowanie wysłane. Sprawdź potwierdzenie w sieci.'));onDone();}}/>}</Modal>}</section>;
 }

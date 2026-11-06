@@ -8,7 +8,7 @@ import { CryptoIcon } from './CryptoIcon';
 import { ActivityPanel } from './ActivityPanel';
 import { Button, CopyButton, Tag } from './ui';
 import { numberText, shorten, moveAsset, type Preferences, type CardSize } from '../lib/preferences';
-const metadata = { SOL: { name: 'Solana', className: 'sol' }, ETH: { name: 'Ethereum', className: 'eth' }, BTC: { name: 'Bitcoin', className: 'btc' } };
+const metadata = { RH:{name:'Robinhood Chain',className:'eth'}, SOL: { name: 'Solana', className: 'sol' }, ETH: { name: 'Ethereum', className: 'eth' }, BTC: { name: 'Bitcoin', className: 'btc' } };
 const sizes: CardSize[] = ['small', 'medium', 'large'];
 export default function Dashboard({ api, walletId, accounts, balances, network, name, activity, activityLoading, onActivityRefresh, onActivityMore, loading, hidden, prefs, onPreferences, onRefresh, onReceive, onSend, onExplorer }: {
     api?: WalletAPI;

@@ -3,9 +3,9 @@ import {z} from 'zod';
 import {atomicWrite} from './vault';
 import type {DeviceProtector} from './app-vault';
 import type {ActivityPage,Chain,Network} from './types';
-const text=z.string().max(1000),chain=z.enum(['SOL','ETH','BTC']);
+const text=z.string().max(1000),chain=z.enum(['SOL','ETH','BTC','RH']);
 const item=z.object({id:text,hash:text,chain,network:z.enum(['mainnet','testnet']),networkLabel:text,direction:z.enum(['in','out','self','other']),amount:text,attemptedAmount:text.optional(),from:z.array(text).max(100),to:z.array(text).max(100),fee:text.nullable(),feePaidByWallet:z.boolean(),at:z.number().nullable(),status:z.enum(['confirmed','pending','failed','unknown']),confirmations:z.number().nullable(),block:z.number().nullable(),source:z.enum(['network','local']),kind:text,amountBasis:z.enum(['transfer','balance-change']),explorer:text,asset:z.object({standard:text,address:text,tokenId:text.optional(),symbol:text}).optional()}).strict();
-const pageSchema=z.object({unavailable:z.array(chain).max(3).optional(),items:z.array(item).max(5000),next:z.object({SOL:z.string().max(16000).nullable().optional(),ETH:z.string().max(16000).nullable().optional(),BTC:z.string().max(16000).nullable().optional()}).strict(),warnings:z.array(z.object({chain,message:text})).max(100),fetchedAt:z.number()}).strict();
+const pageSchema=z.object({unavailable:z.array(chain).max(3).optional(),items:z.array(item).max(5000),next:z.object({RH:z.string().max(16000).nullable().optional(),SOL:z.string().max(16000).nullable().optional(),ETH:z.string().max(16000).nullable().optional(),BTC:z.string().max(16000).nullable().optional()}).strict(),warnings:z.array(z.object({chain,message:text})).max(100),fetchedAt:z.number()}).strict();
 const schema=z.object({version:z.literal(1),walletId:z.string().uuid(),network:z.enum(['mainnet','testnet']),addresses:z.string().max(500),advanced:z.array(chain).max(3),page:pageSchema}).strict();
 export type CachedActivity=z.infer<typeof schema>;
 export async function readActivityCache(path:string,protector:DeviceProtector,walletId:string,network:Network,addresses:string):Promise<CachedActivity|undefined>{
@@ -15,7 +15,7 @@ export function mergeActivityCache(old:CachedActivity|undefined,incoming:Activit
  const rows=new Map(old?.page.items.map(x=>[x.id,x])||[]);for(const row of incoming.items)rows.set(row.id,row);
  const items=[...rows.values()].sort((a,b)=>Number(b.status==='pending')-Number(a.status==='pending')||(b.at||0)-(a.at||0)||a.id.localeCompare(b.id));
  const advanced=new Set(old?.advanced||[]);const oldRows=old?.page.items||[];const group=(x:ActivityPage['items'][number])=>x.chain+':'+(x.asset?x.asset.standard+':'+x.asset.address.toLowerCase():x.id.includes(':internal:')?'internal':'native');const groups=new Map<string,boolean>();for(const x of incoming.items){const k=group(x);groups.set(k,!!groups.get(k)||oldRows.some(o=>o.id===x.id));}const gaps=new Set(incoming.items.filter(x=>groups.get(group(x))===false).map(x=>x.chain));if(selected&&cursor)advanced.add(selected);const next={...old?.page.next};
- for(const c of ['SOL','ETH','BTC'] as const)if(c in incoming.next){const failed=incoming.unavailable?.includes(c);if(!failed&&(cursor||!advanced.has(c)||!(c in next)||gaps.has(c)))next[c]=incoming.next[c];}
+ for(const c of ['SOL','ETH','BTC','RH'] as const)if(c in incoming.next){const failed=incoming.unavailable?.includes(c);if(!failed&&(cursor||!advanced.has(c)||!(c in next)||gaps.has(c)))next[c]=incoming.next[c];}
  const warnings=[...(old?.page.warnings||[]).filter(w=>!(w.chain in incoming.next)),...incoming.warnings];if(items.length>5000)warnings.push({chain:selected||'ETH',message:'Cache obejmuje 5000 najnowszych rekordów. Starsze dane sprawdź w eksploratorze.'});
  return {version:1,...identity,advanced:[...advanced],page:{unavailable:incoming.unavailable,items:items.slice(0,5000),next,warnings:warnings.slice(-100),fetchedAt:incoming.fetchedAt}};
 }

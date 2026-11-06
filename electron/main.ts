@@ -21,7 +21,7 @@ function trusted(event:Electron.IpcMainInvokeEvent){
  const url=event.senderFrame.url;if(dev?!url.startsWith('http://127.0.0.1:5173/'):!url.startsWith('frame://app/'))throw new Error('Niedozwolony dokument.');
 }
 function handle(name:string,fn:(...args:any[])=>unknown){ipcMain.handle(`wallet:${name}`,async(event,...args)=>{
- trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if((name!=='chat'||args[0]?.action!=='view')&&(name!=='frameRun'||args[0]?.action!=='status')&&['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','configure','chat','chatImage','copyChat','frameRun'].includes(name))lastActivity=Date.now();
+ trusted(event);if(Date.now()-lastActivity>5*60_000)lock();if((!['chat','community'].includes(name)||args[0]?.action!=='view')&&(name!=='frameRun'||args[0]?.action!=='status')&&['unlock','initialize','migrate','create','import','switchWallet','renameWallet','changePin','send','quote','reveal','copyText','assetQuote','assetSend','saveIntegrations','uploadMetadata','creation','community','configure','chat','chatImage','copyChat','frameRun'].includes(name))lastActivity=Date.now();
  try{return {ok:true,value:await fn(...args)};}catch(error){const message=error instanceof z.ZodError?'Nieprawidłowe dane wejściowe.':error instanceof Error?error.message:'Operacja nie powiodła się.';return {ok:false,error:message.replace(/https?:\/\/\S+/g,'[adres usługi]')};}
 });}
 function lock(){void frameRun?.interrupt();wallet.lock();window?.webContents.send('wallet:locked');}
@@ -55,6 +55,10 @@ else app.whenReady().then(()=>{
  window.webContents.on('before-input-event',()=>{lastActivity=Date.now();});
  powerMonitor.on('lock-screen',lock);powerMonitor.on('suspend',lock);window.on('closed',()=>wallet.lock());
  handle('integrations',()=>wallet.integrationStatus());handle('saveIntegrations',input=>wallet.saveIntegrations(input));handle('configure',input=>wallet.configure(input));
+ handle('community',input=>wallet.community(input));
+ handle('networkAssets',input=>wallet.networkAssets(input));
+ handle('creation',input=>wallet.creation(input));
+ handle('nftFileHash',input=>wallet.nftFileHash(input));
  handle('nfts',input=>wallet.nfts(input));handle('nftImage',(uri,retry)=>wallet.nftImage(uri,z.boolean().optional().parse(retry)));handle('uploadMetadata',input=>wallet.uploadMetadata(input));handle('usdc',network=>wallet.usdc(network));handle('assetQuote',input=>wallet.assetQuote(input));handle('assetOperations',()=>wallet.assetOperations());
  handle('assetSend',id=>wallet.assetSend(id,async quote=>{const result=await dialog.showMessageBox(window,{type:'warning',title:t('FRAME · Potwierdź operację'),message:t(quote.title),detail:[t(`Sieć: ${quote.chain} ${quote.network}`),t(`Nadawca: ${quote.from}`),...quote.details.map(t),`${t(quote.feeLabel)}: ${quote.fee}`,t(`Liczba transakcji: ${quote.transactions}`),t('Operacja jest nieodwracalna.')].join('\n'),buttons:[t('Anuluj'),t('Podpisz i wykonaj')],defaultId:0,cancelId:0,noLink:true});return result.response===1;}));
  handle('chat',input=>wallet.chat(input,async text=>{const result=await dialog.showMessageBox(window,{type:'question',title:t('FRAME · Aktywuj czat'),message:t('Podpisz upoważnienie klucza czatu'),detail:text,buttons:[t('Anuluj'),t('Podpisz wiadomość')],defaultId:0,cancelId:0,noLink:true});return result.response===1;}));
@@ -71,10 +75,10 @@ else app.whenReady().then(()=>{
  handle('history',()=>wallet.history());handle('reveal',password=>wallet.reveal(z.string().max(256).parse(password)));
  handle('send',id=>wallet.send(id,async quote=>{
   // An OS-owned confirmation shows the immutable, main-process quote, outside React.
-  const result=await dialog.showMessageBox(window,{type:'warning',title:t('FRAME · Potwierdź przelew'),message:translate('Wyślij {0}',wallet.integrations.language,`${quote.amount} ${quote.chain}?`),detail:[t(`Sieć: ${quote.networkLabel}`),t(`Odbiorca: ${quote.to}`),`${t('Opłata')}: ${quote.fee} ${quote.chain}`,'',t('Przelewu nie można cofnąć.')].join('\n'),buttons:[t('Anuluj'),t('Podpisz i wyślij')],defaultId:0,cancelId:0,noLink:true});return result.response===1;
+  const result=await dialog.showMessageBox(window,{type:'warning',title:t('FRAME · Potwierdź przelew'),message:translate('Wyślij {0}',wallet.integrations.language,`${quote.amount} ${quote.chain}?`),detail:[t(`Sieć: ${quote.networkLabel}`),t(`Odbiorca: ${quote.to}`),`${t('Opłata')}: ${quote.fee} ${quote.chain==='RH'?'ETH':quote.chain}`,'',t('Przelewu nie można cofnąć.')].join('\n'),buttons:[t('Anuluj'),t('Podpisz i wyślij')],defaultId:0,cancelId:0,noLink:true});return result.response===1;
  }));
  handle('openExplorer',transfer=>{
-  const data=z.object({chain:z.enum(['SOL','ETH','BTC']),network:networkSchema,hash:z.string().max(128)}).passthrough().parse(transfer);
+  const data=z.object({chain:z.enum(['SOL','ETH','BTC','RH']),network:networkSchema,hash:z.string().max(128)}).passthrough().parse(transfer);
   return shell.openExternal(explorer(data.chain,data.network,data.hash));
  });
  setInterval(()=>{if(Date.now()-lastActivity>5*60_000&&wallet.status('testnet').unlocked)lock();},10000).unref();

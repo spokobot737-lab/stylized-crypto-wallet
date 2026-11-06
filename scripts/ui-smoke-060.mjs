@@ -27,7 +27,7 @@ async function contrast(page,label){
 }
 try{
  const page=await application.firstWindow({timeout:60000});page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));await page.getByRole('button',{name:'Chat',exact:true}).click();await page.locator('.chat-contacts>button').first().click();await page.getByText('Dziękuję. Spotkajmy się jutro o 10:00.',{exact:true}).waitFor();
- const navigation=await page.locator('.sidebar nav button').allTextContents();assert.deepEqual(navigation.map(x=>x.trim()),['Twój portfel','NFT','Chat','FRAME Run']);assert.equal(await page.locator('.sidebar-bottom').getByRole('button',{name:'Ustawienia',exact:true}).count(),1);
+ const navigation=await page.locator('.sidebar nav button').allTextContents();assert.deepEqual(navigation.map(x=>x.trim()),['Twój portfel','NFT','Chat','Społeczność','Gry']);assert.equal(await page.locator('.sidebar-bottom').getByRole('button',{name:'Ustawienia',exact:true}).count(),1);
  assert.equal(await page.evaluate(()=>typeof window.require),'undefined');
  const separator=page.getByRole('separator',{name:'Szerokość listy rozmów'});await separator.focus();await separator.press('ArrowRight');assert.equal(await separator.getAttribute('aria-valuenow'),'250');
  const box=await separator.boundingBox();await page.mouse.move(box.x+3,box.y+20);await page.mouse.down();await page.mouse.move(box.x+43,box.y+20);await page.mouse.up();assert.equal(await separator.getAttribute('aria-valuenow'),'290');
