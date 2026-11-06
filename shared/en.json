@@ -727,5 +727,7 @@
   "Zbieraj punkty i unikaj kolizji.": "Collect points and avoid collisions.",
   "21 punktów, wyłącznie kredyty zabawowe.": "21 points, play credits only.",
   "Jedno zero, lokalne kredyty zabawowe.": "Single zero, local play credits.",
-  "Klondike, dobieranie jednej karty.": "Klondike, draw one."
+  "Klondike, dobieranie jednej karty.": "Klondike, draw one.",
+  "Odbierz ETH (Robinhood)": "Receive ETH (Robinhood)",
+  "Wyślij ETH (Robinhood)": "Send ETH (Robinhood)"
 }
