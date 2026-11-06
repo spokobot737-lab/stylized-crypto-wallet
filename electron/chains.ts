@@ -11,7 +11,8 @@ export const endpoints = {
 };
 export const chainId = (n: Network,chain:string='ETH') => chain==='RH'?(n==='mainnet'?4663n:46630n):(n==='mainnet'?1n:11155111n);
 export function units(text: string, decimals: number): bigint {
- if (!new RegExp(`^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,${decimals}})?$`).test(text)) throw new Error(`Nieprawidłowa kwota. Maksymalnie ${decimals} miejsc po przecinku.`);
+ if(!Number.isInteger(decimals)||decimals<0||decimals>36)throw Error('Nieprawidłowa precyzja aktywa.');
+ if (!(decimals===0?/^(0|[1-9][0-9]{0,15})$/:new RegExp(`^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,${decimals}})?$`)).test(text)) throw new Error(`Nieprawidłowa kwota. Maksymalnie ${decimals} miejsc po przecinku.`);
  const [whole,frac='']=text.split('.'); const value=BigInt(whole)*10n**BigInt(decimals)+BigInt(frac.padEnd(decimals,'0'));
  if(value<=0n) throw new Error('Kwota musi być większa od zera.'); return value;
 }
