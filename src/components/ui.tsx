@@ -1,7 +1,7 @@
 import { tr } from '../lib/i18n';
 import { X, ArrowUpRight, Check, Copy } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react';
-export function Button({ children, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) { return <button className={`button ${className}`} {...props}>{children}</button>; }
+export function Button({ children, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) { return <button type="button" className={`button ${className}`} {...props}>{children}</button>; }
 export function Tag({ children, tone = '' }: {
     children: ReactNode;
     tone?: string;
@@ -38,8 +38,8 @@ export function Modal({ title, eyebrow, children, onClose }: {
     onClose: () => void;
 }) {
     const ref = useRef<HTMLDivElement>(null);
-    useEffect(() => { const previous = document.activeElement as HTMLElement; ref.current?.focus(); function keyboard(e: KeyboardEvent) { if (e.key === 'Escape')
-        onClose(); if (e.key === 'Tab') {
+    const close = useRef(onClose); close.current = onClose;
+    useEffect(() => { const previous = document.activeElement as HTMLElement; ref.current?.focus(); function keyboard(e: KeyboardEvent) { if (Array.from(document.querySelectorAll('[role=dialog]')).at(-1)!==ref.current) return; if (e.key === 'Escape') { e.preventDefault(); close.current(); } if (e.key === 'Tab') {
         const items = ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,textarea,[tabindex="0"]');
         if (!items?.length)
             return;
@@ -52,7 +52,7 @@ export function Modal({ title, eyebrow, children, onClose }: {
             e.preventDefault();
             first.focus();
         }
-    } } document.addEventListener('keydown', keyboard); return () => { document.removeEventListener('keydown', keyboard); previous?.focus(); }; }, [onClose]);
+    } } document.addEventListener('keydown', keyboard); return () => { document.removeEventListener('keydown', keyboard); previous?.focus(); }; }, []);
     return <div className="modal-backdrop"><div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className="modal panel"><div className="modal-head"><div><div className="eyebrow">{eyebrow}</div><h2>{title}</h2></div><button className="icon-button" aria-label={tr("Zamknij")} onClick={onClose}><X /></button></div>{children}</div></div>;
 }
 export function Field({ label, children, hint }: {

@@ -60,13 +60,13 @@ export async function prepare(seed:Buffer, chain:Chain, network:Network,to:strin
  }
  if(chain==='ETH'||chain==='RH'){
   if(!isAddress(to)) throw new Error('Nieprawidłowy adres Ethereum.'); const recipient=getAddress(to); if(recipient==='0x0000000000000000000000000000000000000000') throw new Error('Adres zerowy jest zablokowany.');
-  const value=units(amount,18),p=ethProvider(network,chain);
+  let value=amount==='max'?1n:units(amount,18);const p=ethProvider(network,chain);
   try{
    if((await p.getNetwork()).chainId!==chainId(network,chain)) throw new Error('Niezgodna sieć RPC.');
    if(await p.getCode(recipient)!=='0x') throw new Error('Ta wersja obsługuje przelewy ETH na zwykłe konta, bez wywoływania kontraktów.');
    const [gasEstimate,feeData,nonce,balance]=await Promise.all([p.estimateGas({from:account.address,to:recipient,value}),p.getFeeData(),p.getTransactionCount(account.address,'pending'),p.getBalance(account.address,'pending')]);
    if(!feeData.maxFeePerGas||feeData.maxPriorityFeePerGas===null) throw new Error('Brak danych opłaty EIP-1559.');
-   const gasLimit=gasEstimate*120n/100n;const fee=gasLimit*feeData.maxFeePerGas;
+   const gasLimit=gasEstimate*120n/100n;const fee=gasLimit*feeData.maxFeePerGas;if(amount==='max'){value=balance-fee;if(value<=0n)throw Error('Za mało ETH po odjęciu maksymalnej opłaty.');amount=formatEther(value);}
    if(fee>parseEther('0.05')) throw new Error('Opłata przekracza limit bezpieczeństwa 0,05 ETH.');
    if(balance<value+fee) throw new Error('Za mało ETH na kwotę i maksymalną opłatę.');
    return {chain,network,to:recipient,amount,from:account.address,fee:formatEther(fee),feeLabel:'maks. opłata (EIP-1559)',payload:{to:recipient,value,chainId:chainId(network,chain),nonce,type:2,gasLimit,maxFeePerGas:feeData.maxFeePerGas,maxPriorityFeePerGas:feeData.maxPriorityFeePerGas}};

@@ -1,0 +1,50 @@
+{
+  "at": "2026-11-07T12:06:31.167Z",
+  "evmAddress": "0x39f5470a0699d7Ef97224193D93426FDc67940CA",
+  "solAddress": "GajZf2ZjgDH83qNaHwDfqp9MVYuAfrfroszA4n7CPVhh",
+  "networks": [
+    {
+      "chain": "ETH",
+      "error": "The operation was aborted due to timeout"
+    },
+    {
+      "chain": "RH",
+      "id": {
+        "http": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": "0xb626"
+        }
+      },
+      "balance": {
+        "http": 200,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": "0x0"
+        }
+      }
+    },
+    {
+      "chain": "SOL",
+      "genesis": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+      "balance": 0
+    }
+  ],
+  "airdropError": "410 Gone:  {\"jsonrpc\":\"2.0\",\"error\":{\"code\": 410, \"message\":\"The RPC faucet is closed on this cluster. Request test SOL at https://faucet.solana.com\"}, \"id\": \"49fb6b2a-575a-4d9b-9529-3e1438ba048d\" } \r\n",
+  "earlier_read_probe": {
+    "ETH": {
+      "http": 200,
+      "chainId": "0xaa36a7"
+    },
+    "RH": {
+      "http": 200,
+      "chainId": "0xb626"
+    },
+    "SOL": {
+      "http": 200,
+      "genesis": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
+    }
+  }
+}

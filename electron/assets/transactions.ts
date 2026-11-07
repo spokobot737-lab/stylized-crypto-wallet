@@ -45,7 +45,7 @@ export async function prepareAsset(seed:Buffer,input:unknown,keys:IntegrationKey
 }
 async function prepareEvm(seed:Buffer,intent:AssetIntent):Promise<AssetPrepared>{
  const from=ethKey(seed).address,p=ethereum(intent.network,intent.chain);let to=from,title='',data='',createdAddresses:string[]=[],details:string[]=[];let deployment=false;
- try{await checkEthereum(p,intent.network,intent.chain);
+ try{await checkEthereum(p,intent.network,intent.chain);const initialBalance=await p.getBalance(from,'pending');if(initialBalance===0n)throw Error(intent.network==='testnet'?'Brak testowych ETH na opłatę w wybranej sieci. Zasil ten adres z faucetu tej sieci.':'Za mało ETH na opłatę w wybranej sieci.');
   if(intent.kind==='usdc'||intent.kind==='token'){
    to=destination(intent.to,from,'ETH');const contract=intent.kind==='token'?getAddress(intent.address):USDC[intent.network].ETH,token=new Contract(contract,ERC20,p),decimals=Number(await token.decimals());if(!Number.isInteger(decimals)||decimals<0||decimals>36||intent.kind==='usdc'&&decimals!==6)throw Error('Nieprawidłowa precyzja tokena.');const amount=units(intent.amount,decimals);if(await token.balanceOf(from)<amount)throw Error('Za mało tokenów.');if(await token.transfer.staticCall(to,amount,{from})!==true)throw Error('Kontrakt odrzucił transfer.');data=new Interface(ERC20).encodeFunctionData('transfer',[to,amount]);title=`Wyślij ${formatUnits(amount,decimals)} ${intent.kind==='usdc'?'USDC':'ERC-20'}`;details=[`Odbiorca: ${to}`,`Kontrakt: ${contract}`,`Sieć: ${intent.chain} ${intent.network}`];
   }else if(intent.kind==='nft'){

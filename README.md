@@ -8,11 +8,17 @@ Cztery motywy: **Pop Control** (kremowy dashboard, intensywne kafelki, grube ram
 
 1. Repozytorium i Releases są publiczne. Pobieranie instalatora nie wymaga konta.
 2. Otwórz **Releases**, wybierz najnowsze wydanie i rozwiń **Assets**.
-3. Pobierz **FRAME-Wallet-0.8.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
-4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.8.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
+3. Pobierz **FRAME-Wallet-0.9.0-Setup-x64.exe**. Archiwa „Source code” nie są instalatorem.
+4. Opcjonalnie zweryfikuj sumę pliku przez `Get-FileHash .\FRAME-Wallet-0.9.0-Setup-x64.exe -Algorithm SHA256` i porównaj z `SHA256SUMS.txt`.
 5. Uruchom instalator na Windows 10/11 x64. Instalator nie ma podpisu Authenticode, ponieważ projekt nie zawiera certyfikatu wydawcy.
 
 Gdy build trwa, stan jest w **Actions → Build Windows installer**. Gotowy instalator jest też w artefakcie `FRAME-Wallet-Windows-x64`.
+
+## Poprawki 0.9
+
+Stabilny focus okien i prywatnych szkiców profili. Czat: saldo aktywa i gazu, Max rezerwujący opłatę, kontrola własności NFT i zachowanie formularza. Społeczność: centralny feed, wątki, profile, kontakt i bufor nowych wpisów bez skoków przewijania. Szachy: lokalny komputer offline (Easy/Medium/Hard) w workerze, kolor i anulowanie obliczeń. Mintowanie: podgląd zgodny z CSP, automatyczny wybór miejsca zapisu według wielkości pliku, dokładne etapy błędów, potwierdzenie niezależne od indeksu galerii i wznowienie tej samej operacji.
+
+[Przyczyny, testy, limity i stan testnetów 0.9](docs/0.9.0-TESTING.md). Wszystkie trzy RPC testnetów odpowiedziały na odczyt co najmniej raz 2026-11-07. Mintowanie na publicznych testnetach pozostaje **niepotwierdzone** z powodu braku środków/faucetu. Pełny mint PNG/TXT sprawdzono na lokalnym EVM, nie na sieci publicznej. Wersja 0.9 zachowuje dane i nie zmienia kluczy ani schematu sejfu.
 
 ## Nowości 0.8
 

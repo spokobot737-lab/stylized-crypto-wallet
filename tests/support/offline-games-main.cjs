@@ -1,0 +1,6 @@
+// Same local asset scheme as production. No wallet data or service is simulated.
+const {app,BrowserWindow,protocol}=require('electron');
+app.setPath('userData',require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(),'frame-offline-games-')));
+const {readFile}=require('node:fs/promises');const{resolve,sep,extname}=require('node:path');
+protocol.registerSchemesAsPrivileged([{scheme:'frame',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
+app.disableHardwareAcceleration();app.whenReady().then(async()=>{const root=resolve('dist');protocol.handle('frame',async request=>{const u=new URL(request.url),p=resolve(root,'.'+decodeURIComponent(u.pathname));if(u.hostname!=='app'||!p.startsWith(root+sep))return new Response('',{status:403});try{return new Response(await readFile(p),{headers:{'Content-Type':({'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.png':'image/png'})[extname(p)]||'application/octet-stream'}});}catch{return new Response('',{status:404});}});const w=new BrowserWindow({width:1440,height:1000,show:true,webPreferences:{offscreen:true,contextIsolation:true,nodeIntegration:false,sandbox:true}});await w.loadURL('frame://app/index.html');});app.on('window-all-closed',()=>app.quit());
