@@ -57,8 +57,10 @@ jobs:
         run: node scripts/ui-frame-run.mjs
       - name: Verify FRAME Run inside Frame Wallet
         run: node scripts/ui-frame-run-wallet.mjs
-      - name: Verify all six offline games and isolated profile HTML
+      - name: Verify all six offline games, computer chess and isolated profile HTML
         run: node scripts/ui-games-080.mjs && node scripts/ui-profile-080.mjs
+      - name: Verify stable forms, social feed and real local NFT mint
+        run: node scripts/ui-interactions-090.mjs && node scripts/ui-social-090.mjs && node scripts/ui-mint-090.mjs
       - name: Package Windows x64 NSIS installer
         run: npx electron-builder --win nsis --x64 --publish never
         env:
@@ -139,21 +141,20 @@ jobs:
           }
           $notes = @"
           FRAME Wallet ${version}: Windows x64.
-          Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets. Archiwum Source code zawiera źródła, bez gotowego EXE.
-          Gry offline: FRAME Run (skok i kucanie), Szachy, Snake, Blackjack, Ruletka i Pasjans. Kredyty zabawowe nie są pieniędzmi ani saldem FRAME.
-          Uproszczone NFT z pliku, SHA-256, jawna publikacja i odzyskiwanie identycznej podpisanej transakcji. Ethereum/Robinhood do 8 KiB w metadanych; większe obsługiwane pliki do 5 MB wymagają własnego konta Pinata.
-          Przelewy EVM i NFT ze zweryfikowanego kontaktu czatu, niezależna weryfikacja kart i ponawianie samej wiadomości.
-          Prywatny szkic i publiczny profil, baner, HTML w sandboxie; publiczne forum Nostr i opt-in presence do 120 s. To nie jest bezpośrednie P2P.
-          Robinhood Chain 4663/46630 przez wspólny adapter EVM. Podane publiczne RPC zwróciły tutaj HTTP 403; brak potwierdzenia działania na rzeczywistym testnecie i mainnecie. Testy EVM są lokalne. Historia zależy od Blockscout; NFT bez pełnego indeksu wymagają importu.
-          Zachowano portfele, PIN, klucze, rozmowy i preferencje. Historia czatu v2 jest kopiowana przed migracją do v3.
-          Szczegóły konfiguracji, testów i ograniczeń: docs/0.8.0-TESTING.md w źródłach tego wydania.
-          Sześć gier nie wymaga serwera. Zachowany opcjonalny tryb punktowy FRAME Run v1 wymaga osobnego serwera i konta, jak w 0.7.0; publiczna usługa punktów nie jest wdrożona.
-          CI sprawdza testy, typy, rzeczywisty Electron i pakiet Windows przed publikacją. Pełny ręczny proces instalacji NSIS na prywatnym komputerze nie był testowany. Instalator bez Authenticode.
-          Bezpłatne relaye, RPC i hosting mają limity i nie gwarantują wieczystego dostępu. Nie wykonano transakcji mainnet.
+          Pobierz FRAME-Wallet-${version}-Setup-x64.exe z Assets. ZIP Source code zawiera źródła, bez EXE.
+          Naprawiono utratę focusu i resetowanie interakcji w dialogach czatu/profilu; callback onClose nie uruchamia ponownie efektu focusu podczas odświeżeń. Szkice pozostają lokalne do jawnego zapisu/publikacji.
+          Czat: salda aktywa/gazu, Max z rezerwą opłaty, filtrowanie NFT według aktualnej własności, bez duplikowania płatności przy ponawianiu karty.
+          Społeczność: centralny feed z buforem nowych wpisów, wątki, strony profili, istniejące zweryfikowane prośby o kontakt, responsywne panele. Publiczne Nostr, nie E2EE; status wygasa po 120 s. HTML nadal w sandboxie.
+          Szachy offline: komputer Easy/Medium/Hard, wybór koloru i worker js-chess-engine 2.4.6 (MIT). Zachowano grę lokalną i pozostałe gry.
+          NFT: podgląd zgodny z CSP, etapy błędów, automatyczny wybór zapisu, potwierdzenie i metadane niezależne od galerii, czyszczenie cache po potwierdzeniu oraz odzyskiwanie tej samej podpisanej transakcji.
+          Weryfikacja: 85 testów, typy, build, rzeczywisty Electron, interakcje pod odświeżeniami, szachy offline, izolacja HTML, pełny lokalny mint PNG/TXT i galeria. Szczegóły: docs/0.9.0-TESTING.md.
+          Odczyty testnetów ETH/RH/SOL potwierdzono 2026-11-07. Brak potwierdzonego mintu na publicznych testnetach: brak środków testowych, faucet RPC Solana zamknięty (410), strona faucetu Robinhood 403; Sepolia miała też timeout. Nie wykonano transakcji mainnet. Test lokalny nie zastępuje testu sieci publicznej.
+          Pliki do 8 KiB EVM mogą być zawarte w metadanych. Większe obsługiwane pliki do 5 MB wymagają własnego publicznego hostingu Pinata; Solana wymaga krótkiego URI. Bez płatnej usługi obowiązkowej i bez sekretów developera.
+          Portfele, klucze, PIN, rozmowy, profile i preferencje zachowane. Instalator bez Authenticode; ręczna instalacja na prywatnym komputerze nie była sprawdzana. Publiczny serwer punktów FRAME nadal wymaga osobnej konfiguracji.
           "@
           $notes | Out-File -FilePath release/notes.md -Encoding utf8
           $assets = @(Get-ChildItem release/*.exe | ForEach-Object { $_.FullName })
           $assets += 'release/SHA256SUMS.txt'
-          $assets += @(Get-ChildItem docs/*.png | ForEach-Object { $_.FullName })
+          $assets += @(Get-ChildItem docs/*0.9.0.png | ForEach-Object { $_.FullName })
           gh release create $tag --target $sha --title "FRAME Wallet $tag" --notes-file release/notes.md --prerelease @assets
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
