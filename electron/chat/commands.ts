@@ -4,6 +4,7 @@ var base = { walletId: z.string().uuid() };
 var chatCommandSchema = z.discriminatedUnion("action", [
   z.object({...base,action:z.literal('profile-draft'),profile:z.unknown()}).strict(),
   z.object({...base,action:z.literal('profile-publish')}).strict(),
+  z.object({...base,action:z.literal('payment-balance'),chain:z.enum(['ETH','RH']),network:z.enum(['mainnet','testnet']),kind:z.enum(['native','usdc','token','nft']),address:z.string().max(42).optional(),tokenId:z.string().regex(/^\d{1,78}$/).optional(),standard:z.enum(['ERC721','ERC1155']).optional()}).strict(),
   z.object({...base,action:z.literal('payment-quote'),address:z.string().max(42),intent:z.unknown()}).strict(),
   z.object({...base,action:z.literal('payment-publish'),hash:z.string().regex(/^0x[a-fA-F0-9]{64}$/)}).strict(),
   z.object({...base,action:z.literal('payment-pending')}).strict(),
