@@ -11,7 +11,7 @@ import bs58 from 'bs58';
 import collectionArtifact from './generated/collection.json';
 import { chainId,display,units } from '../chains';
 import { ethKey,solKey } from '../keys';
-import { checkEthereum,ethereum,solana,solRpc,ERC20,ERC721,ERC1155,USDC } from './config';
+import { checkEthereum,checkSolana,ethereum,solana,solRpc,ERC20,ERC721,ERC1155,USDC } from './config';
 import { metadataUrl } from './remote';
 import type { AssetIntent,IntegrationKeys,UsdcBalance } from './types';
 import type { Network } from '../types';
@@ -72,6 +72,7 @@ async function prepareSol(seed:Buffer,intent:AssetIntent,keys:IntegrationKeys):P
  const key=solKey(seed),owner=key.publicKey,from=owner.toBase58();key.secretKey.fill(0);const c=solana(intent.network,keys),umi=createUmi(solRpc(intent.network,keys)).use(mplCore()).use(mplTokenMetadata()).use(signerIdentity(createNoopSigner(publicKey(from))));
  const txs:Transaction[]=[],extraSigners:Keypair[][]=[],createdAddresses:string[]=[];let title='',to=from,details:string[]=[];
  try{
+  await checkSolana(c,intent.network);if(intent.kind==='mint'){const program=await c.getAccountInfo(new PublicKey(MPL_CORE_PROGRAM_ID));if(!program?.executable)throw Error('Program Metaplex Core nie jest dostępny w wybranej sieci.');}
   if(intent.kind==='token')throw Error('Token ERC-20 wymaga sieci EVM.');
   if(intent.kind==='usdc'){
    to=destination(intent.to,from,'SOL');const value=units(intent.amount,6),mint=new PublicKey(USDC[intent.network].SOL),mintInfo=await getMint(c,mint);if(mintInfo.decimals!==6)throw new Error('Nieprawidłowa precyzja tokena USDC.');const destinationKey=new PublicKey(to),ata=getAssociatedTokenAddressSync(mint,destinationKey);const tx=new Transaction().add(createAssociatedTokenAccountIdempotentInstruction(owner,ata,destinationKey,mint));let remaining=value;const accounts=await c.getTokenAccountsByOwner(owner,{mint});
@@ -115,7 +116,7 @@ export async function revalidateAsset(prepared:AssetPrepared){
    if((prepared.intent.kind==='usdc'||prepared.intent.kind==='token')&&new Interface(ERC20).decodeFunctionResult('transfer',result)[0]!==true)throw new Error('Kontrakt USDC odrzucił transfer.');
   }finally{p.destroy();}return;
  }
- const payload=prepared.payload,c=solana(prepared.intent.network,payload.keys),balance=await c.getBalance(new PublicKey(prepared.from),'confirmed');
+ const payload=prepared.payload,c=solana(prepared.intent.network,payload.keys);await checkSolana(c,prepared.intent.network);const balance=await c.getBalance(new PublicKey(prepared.from),'confirmed');
  if(await c.getBlockHeight('confirmed')>payload.lastValidBlockHeight||BigInt(balance)<payload.costs.reduce((a,b)=>a+b,0n))throw new Error('Wycena Solana wygasła lub zmieniło się saldo. Przygotuj operację ponownie.');
  for(let i=0;i<payload.txs.length;i++){
   const simulation=await c.simulateTransaction(new VersionedTransaction(payload.txs[i].compileMessage()),{sigVerify:false,replaceRecentBlockhash:true,commitment:'confirmed',accounts:{encoding:'base64',addresses:[prepared.from]}}),after=simulation.value.accounts?.[0]?.lamports;
@@ -129,6 +130,6 @@ export async function signAsset(seed:Buffer,prepared:AssetPrepared):Promise<{raw
 }
 export async function broadcastAsset(prepared:AssetPrepared,signed:{raw:string;hash:string},index:number){
  if(prepared.payload.kind==='evm'){const p=ethereum(prepared.intent.network,prepared.intent.chain);try{await checkEthereum(p,prepared.intent.network,prepared.intent.chain);if((await p.broadcastTransaction(signed.raw)).hash!==signed.hash)throw new Error('Niezgodny hash.');}finally{p.destroy();}return;}
- const c=solana(prepared.intent.network,prepared.payload.keys);if(await c.getBlockHeight('confirmed')>prepared.payload.lastValidBlockHeight)throw new Error('Wycena Solana wygasła.');const tx=prepared.payload.txs[index];if(await c.sendRawTransaction(Buffer.from(signed.raw,'base64'),{skipPreflight:false,maxRetries:3})!==signed.hash)throw new Error('Niezgodny hash.');
+ const c=solana(prepared.intent.network,prepared.payload.keys);await checkSolana(c,prepared.intent.network);if(await c.getBlockHeight('confirmed')>prepared.payload.lastValidBlockHeight)throw new Error('Wycena Solana wygasła.');const tx=prepared.payload.txs[index];if(await c.sendRawTransaction(Buffer.from(signed.raw,'base64'),{skipPreflight:false,maxRetries:3})!==signed.hash)throw new Error('Niezgodny hash.');
  const confirmation=await c.confirmTransaction({signature:signed.hash,blockhash:tx.recentBlockhash!,lastValidBlockHeight:prepared.payload.lastValidBlockHeight},'confirmed');if(confirmation.value.err)throw new Error('Operacja Solana nie została wykonana.');
 }
